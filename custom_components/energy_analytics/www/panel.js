@@ -210,6 +210,8 @@ function addMonths(iso, n){
 // Séries SINTÉTICAS de um nó com filhos (ver const.py). O id não é entity_id: é prefixo + o
 // entity_id do pai.
 const SUM_PREFIX = 'sum:', UNTRACKED_PREFIX = 'untracked:';
+// Raiz da árvore: consumo da casa. Também não é entity_id — o backend a deriva das 5 fontes.
+const HOME_ID = 'home';
 const parentOf = id => id.startsWith(SUM_PREFIX) ? id.slice(SUM_PREFIX.length)
                      : id.startsWith(UNTRACKED_PREFIX) ? id.slice(UNTRACKED_PREFIX.length) : null;
 
@@ -341,6 +343,7 @@ class EnergyAnalyticsPanel extends HTMLElement {
       row.style.paddingLeft = (16 + n.depth * 18) + 'px';
       row.title = n.synthetic === 'sum' ? `soma dos filhos diretos de ${n.parent}`
                 : n.synthetic === 'untracked' ? `${n.parent} − soma dos filhos diretos`
+                : n.entity === HOME_ID ? 'consumo da casa, derivado das 5 fontes do painel de Energia'
                 : n.entity;
       const cb = document.createElement('input');
       cb.type = 'checkbox'; cb.checked = this.state.sel.has(n.entity); cb.disabled = locked;

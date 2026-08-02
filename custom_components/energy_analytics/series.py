@@ -158,6 +158,48 @@ async def _rows_stats(hass: HomeAssistant, table, ids, lo, hi, step):
         expanding=("ids",))
 
 
+def _home_grid(grid, src):
+    """`Total consumed` do painel de Energia: consumo da casa, derivado das 5 fontes.
+
+    Nao existe como entidade — o HA calcula isto no frontend, e a conta e' a mesma:
+
+        used_solar   = max(0, solar - exportado - carga)      solar que a casa consumiu
+        grid_to_batt = max(0, carga - max(0, solar - export)) rede que foi para a BATERIA
+        consumed     = (rede - grid_to_batt) + used_solar + descarga
+
+    A parcela rede->bateria sai do consumo: ela nao foi consumida pela casa, e deixa-la dentro
+    inflava o `untracked` justamente nas horas de carga via rede.
+
+    ATENCAO: os `max(0, ...)` sao NAO-LINEARES e o HA os avalia na resolucao HORARIA dele. Aqui
+    eles sao avaliados no BUCKET DO PAINEL (decisao travada com o usuario): na fonte
+    `statistics (1 h)` bucket == hora e o numero bate exato com o painel de Energia; nas fontes de
+    5 min pode divergir, porque `sum(max(0, x_5min)) >= max(0, sum(x_hora))`. Divergir ali e'
+    esperado, nao bug.
+    """
+    g_in, g_out, solar, bdis, bchg = (grid.get(e, {}) for e in src)
+    out = {}
+    for bk in set(g_in) | set(g_out) | set(solar) | set(bdis) | set(bchg):
+        exported = abs(g_out.get(bk, 0.0))
+        surplus = max(0.0, solar.get(bk, 0.0) - exported)     # solar que sobrou da exportacao
+        charge = bchg.get(bk, 0.0)
+        used_solar = max(0.0, surplus - charge)
+        grid_to_batt = max(0.0, charge - surplus)
+        out[bk] = round(g_in.get(bk, 0.0) - grid_to_batt + used_solar + bdis.get(bk, 0.0), 4)
+    return out
+
+
+def _children_of(tree, parent):
+    """Filhos DIRETOS. A raiz `home` tem como filhos os devices de topo."""
+    if parent == const.HOME_ID:
+        return list(tree.TOP_LEVEL)
+    return list(tree.CHILDREN.get(parent, []))
+
+
+def _needs(tree, entity):
+    """Entidades REAIS que a consulta precisa para servir `entity`."""
+    return list(tree.SOURCE_ENTITIES) if entity == const.HOME_ID else [entity]
+
+
 def _parse_selection(entities, tree):
     """Separa o pedido em reais x sinteticas e diz o que a CONSULTA precisa buscar.
 
@@ -169,22 +211,25 @@ def _parse_selection(entities, tree):
     """
     requested, need, kids = [], [], {}
     for e in entities:
-        if e in tree.ALL_ENTITIES:
+        if e == const.HOME_ID or e in tree.ALL_ENTITIES:
             requested.append(e)
-            need.append(e)
+            need.extend(_needs(tree, e))
             continue
         for prefix in (const.SUM_PREFIX, const.UNTRACKED_PREFIX):
             if not e.startswith(prefix):
                 continue
             parent = e[len(prefix):]
-            children = list(tree.CHILDREN.get(parent, []))
-            if not children or parent not in tree.ALL_ENTITIES:
+            if parent != const.HOME_ID and parent not in tree.ALL_ENTITIES:
+                break
+            children = _children_of(tree, parent)
+            if not children:
                 break                      # no sem filhos nao tem soma nem sobra
             requested.append(e)
             kids[e] = (parent, children)
-            need.extend(children)
+            for child in children:
+                need.extend(_needs(tree, child))
             if prefix == const.UNTRACKED_PREFIX:
-                need.append(parent)        # a sobra precisa do pai; a soma, nao
+                need.extend(_needs(tree, parent))   # a sobra precisa do pai; a soma, nao
             break
 
     def _uniq(seq):
@@ -247,12 +292,14 @@ async def fetch(hass: HomeAssistant, tree: EnergyTree, entities, d_from, d_to,
     else:
         rows = await _rows_stats(hass, table, ids, lo_q, hi_q, step)
 
+    # Ordem FIXA — `_home_grid` desempacota nela.
+    home_src = (tree.GRID_IN, tree.GRID_OUT, tree.SOLAR, tree.BATT_DIS, tree.BATT_CHG)
     return await hass.async_add_executor_job(
-        _assemble, out, rows, by_id, requested, kids, days, tz, lo_q, hi_q, step, source,
+        _assemble, out, rows, by_id, requested, kids, home_src, days, tz, lo_q, hi_q, step, source,
         degree, smp, step_min)
 
 
-def _assemble(out, rows, by_id, requested, kids, days, tz, lo_q, hi_q, step, source,
+def _assemble(out, rows, by_id, requested, kids, home_src, days, tz, lo_q, hi_q, step, source,
               degree, smp, step_min):
     """Parte de CPU: bucketizacao, preenchimento, contexto e regressao. Roda no executor geral."""
     nbk = int(math.ceil((hi_q - lo_q) / step))
@@ -289,6 +336,13 @@ def _assemble(out, rows, by_id, requested, kids, days, tz, lo_q, hi_q, step, sou
         end = min(nbk - 1, now_bk)
         for bk in range(start, end + 1):
             g.setdefault(bk, 0.0)
+
+    # ---- raiz `Total consumed` --------------------------------------------------------
+    # Derivada das 5 fontes, sobre a grade ja' preenchida. Entra em `grid` como se fosse mais uma
+    # entidade, e dai' em diante e' tratada como qualquer outra — inclusive pelo bloco de baixo,
+    # que produz o `Σ filhos` e o `(untracked)` dela (este ultimo = o `Untracked consumption`).
+    if const.HOME_ID in requested or any(p == const.HOME_ID for p, _ in kids.values()):
+        grid[const.HOME_ID] = _home_grid(grid, home_src)
 
     # ---- series sinteticas: `Σ filhos` e `(untracked)` ---------------------------------
     # Nascem AQUI, sobre a grade ja' preenchida e antes da divisao por dia, para percorrerem

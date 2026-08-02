@@ -8,7 +8,7 @@ from __future__ import annotations
 from homeassistant.core import HomeAssistant
 
 from . import labels, palette
-from .const import SUM_PREFIX, UNTRACKED_PREFIX
+from .const import HOME_ID, HOME_LABEL, SUM_PREFIX, UNTRACKED_PREFIX
 from .energy_tree import EnergyTree
 
 
@@ -23,6 +23,8 @@ def _source_color(tree: EnergyTree) -> dict[str, str]:
 
 
 def color(tree: EnergyTree, entity: str) -> str:
+    if entity == HOME_ID:
+        return palette.HOME
     src = _source_color(tree)
     if entity in src:
         return src[entity]
@@ -73,8 +75,23 @@ def _walk(hass: HomeAssistant, tree: EnergyTree, entity: str, depth: int, out: l
 
 
 def nodes(hass: HomeAssistant, tree: EnergyTree) -> list[dict]:
-    """Lista PLANA na ordem de exibicao; `depth` da a identacao da arvore de consumo."""
+    """Lista PLANA na ordem de exibicao; `depth` da a identacao da arvore de consumo.
+
+    A raiz dos devices e' o `Total consumed` do painel de Energia — consumo da casa, derivado das
+    5 fontes (nao e' entidade). Os devices de topo sao filhos dele, entao a linha `(untracked)` da
+    raiz e' exatamente o `Untracked consumption` que o HA mostra.
+    """
     out = [_node(hass, tree, e, 0, "source") for e in tree.SOURCE_ENTITIES]
+    out.append({
+        "entity": HOME_ID,
+        "label": HOME_LABEL,
+        "color": palette.HOME,
+        "depth": 0,
+        "group": "device",
+        "children": len(tree.TOP_LEVEL),
+    })
+    out.append(_synthetic(tree, HOME_ID, 1, "sum"))
     for e in tree.TOP_LEVEL:
-        _walk(hass, tree, e, 0, out)
+        _walk(hass, tree, e, 1, out)
+    out.append(_synthetic(tree, HOME_ID, 1, "untracked"))
     return out

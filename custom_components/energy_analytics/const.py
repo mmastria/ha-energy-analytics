@@ -23,6 +23,12 @@ MIN_DATE = "2024-01-01"
 SUM_PREFIX = "sum:"              # soma dos filhos diretos
 UNTRACKED_PREFIX = "untracked:"  # pai - soma dos filhos diretos
 
+# Raiz da arvore = consumo da casa (o `Total consumed` do painel de Energia). NAO e' entidade:
+# o HA o deriva das 5 fontes no frontend, e nos derivamos igual (ver series._home_grid). Os
+# devices de topo sao os "filhos" dele, entao `untracked:home` = o `Untracked consumption` do HA.
+HOME_ID = "home"
+HOME_LABEL = "Total consumed"
+
 # Tabelas do recorder. Sem prefixo de schema: a sessao do recorder ja vem no search_path certo.
 TBL_STATES = "states"
 TBL_STATES_META = "states_meta"

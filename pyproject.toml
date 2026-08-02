@@ -1,6 +1,6 @@
 [project]
 name = "ha-energy-analytics"
-version = "0.3.0"
+version = "0.4.0"
 description = "Painel do Home Assistant com perfis diários de 24 h das entidades do painel de Energia"
 readme = "README.md"
 # TRAVADO na mesma versão que o HA de produção roda (system health -> homeassistant.python_version).

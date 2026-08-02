@@ -8,6 +8,7 @@ SOLAR = "#ff9800"      # --energy-solar-color
 BATT_OUT = "#4db6ac"   # --energy-battery-out-color (descarga)
 BATT_IN = "#f06292"    # --energy-battery-in-color (carga)
 UNTRACKED = "#9e9e9e"  # nao monitorado (cards de fonte)
+HOME = "#e0e0e0"       # raiz `Total consumed`: neutro claro, nao colide com nenhuma cor de device
 HIST_UNKNOWN = "#606060"  # --history-unknown-color do HA (untracked do gráfico de detalhe)
 
 # paleta ciclica de devices = `--color-1`..`--color-54` de
