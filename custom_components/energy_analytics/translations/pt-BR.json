@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Energy Analytics",
+        "description": "Adiciona o painel \"Energy Analytics\" na barra lateral: perfis diários de 24 h das entidades do painel de Energia, somente leitura sobre o recorder."
+      }
+    },
+    "abort": {
+      "already_configured": "O Energy Analytics já está configurado."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Energy Analytics",
+        "data": {
+          "max_days": "Máximo de dias por consulta"
+        },
+        "data_description": {
+          "max_days": "Teto do intervalo que o painel pode pedir de uma vez. Intervalos maiores custam mais tempo de recorder."
+        }
+      }
+    }
+  }
+}

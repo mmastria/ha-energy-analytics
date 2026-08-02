@@ -1,0 +1,14 @@
+{
+  "domain": "energy_analytics",
+  "name": "Energy Analytics",
+  "codeowners": ["@mastria"],
+  "config_flow": true,
+  "dependencies": ["http", "websocket_api", "frontend", "panel_custom", "recorder", "energy"],
+  "documentation": "https://github.com/mastria/ha-energy-analytics",
+  "integration_type": "service",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/mastria/ha-energy-analytics/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "0.1.0"
+}

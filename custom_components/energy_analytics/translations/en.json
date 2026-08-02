@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Energy Analytics",
+        "description": "Adds an \"Energy Analytics\" panel to the sidebar: 24 h daily profiles of the Energy Dashboard entities, read-only from the recorder."
+      }
+    },
+    "abort": {
+      "already_configured": "Energy Analytics is already set up."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Energy Analytics",
+        "data": {
+          "max_days": "Maximum days per request"
+        },
+        "data_description": {
+          "max_days": "Upper bound for the date range the panel may ask for in one go. Larger ranges cost more recorder time."
+        }
+      }
+    }
+  }
+}
