@@ -29,16 +29,39 @@ ha_get_integration(query="Energy Analytics", include_options=True)
 ```
 `state` = `loaded`, `disabled_by` = `null`, `options.max_days` = o esperado (hoje `15`).
 
-## 4. Painel + comandos WS (visual — Playwright MCP)
-- `browser_navigate http://homeassistant:8123/energy-analytics`
-- **Energy Analytics** aparece na sidebar (visível só para admin).
-- A árvore de entidades carrega = `energy_analytics/tree` respondeu.
-- Marcar uma entidade (`.row[title="sensor.pwm_grid_energy"] input` dentro do shadow root) desenha
-  o gráfico = `energy_analytics/series` respondeu.
-- `browser_console_messages` sem erro; `browser_take_screenshot` para o registro.
+## 4. Painel + comandos WS (visual)
 
-Sem browser à mão: pelo console do painel,
-`document.querySelector("energy-analytics-panel")._hass.callWS({type:"energy_analytics/tree"})`.
+Use a **extensão do Chrome** (`claude-in-chrome`), não o Playwright: ela reaproveita a sessão do
+usuário. O Playwright sobe perfil limpo e cai no `/auth/authorize` — e login com senha não é coisa
+que se faça por automação.
+
+- navegar para `http://homeassistant:8123/energy-analytics`
+- **Energy Analytics** na sidebar, com `mdi:chart-bell-curve-cumulative` (só admin vê). Ela é longa:
+  **role até o fim** antes de dizer que não está lá
+- a árvore carrega com **33 linhas** e indentação = `energy_analytics/tree` respondeu
+- marcar `PWM Grid Energy` desenha o gráfico = `energy_analytics/series` respondeu
+- console sem erro **do painel**; screenshot para o registro
+
+⚠️ **A primeira screenshot costuma sair preta** — é a página ainda montando, não falha do painel.
+Confirme pelo DOM antes de concluir qualquer coisa.
+
+⚠️ **`document.querySelector` NÃO atravessa shadow DOM.** O painel vive aninhado dentro de
+`home-assistant` → `home-assistant-main` → `partial-panel-resolver`, então a busca rasa devolve
+`null` e parece que o elemento não montou. Use travessia recursiva:
+
+```js
+function deepFind(sel, root=document, seen=new Set()){ if(seen.has(root))return null; seen.add(root);
+  const h=root.querySelector&&root.querySelector(sel); if(h)return h;
+  for(const n of (root.querySelectorAll?root.querySelectorAll("*"):[])) if(n.shadowRoot){
+    const r=deepFind(sel,n.shadowRoot,seen); if(r)return r;} return null;}
+const el = deepFind("energy-analytics-panel");   // el.shadowRoot, el._hass, el.shadowRoot.getElementById('from')
+```
+
+O registro do painel também sai direto do hass:
+`document.querySelector("home-assistant").hass.panels["energy-analytics"]`.
+
+**Regressão a testar sempre** (invariante 8b): esvaziar o campo `Até` e clicar ▶ **não** pode
+lançar nada nem deslocar `De`. Já foi `RangeError: Invalid time value`, corrigido na v0.1.1.
 
 ## 5. `full` — ciclo de reload
 Recarregar a entry **2×** (Configurações → Dispositivos e serviços → ⋮ → Recarregar) e conferir
@@ -49,12 +72,13 @@ que o log **não** traz `ValueError: Overwriting panel` (invariante H3) nem
 
 Uma linha por item: passou / falhou / **não verificado**. Não diga que funciona sem ter visto.
 
-Estado conhecido (2026-08-02, `v0.1.1`):
-- 1–3 OK — HACS `installed_version: v0.1.1`, entry `loaded`, log limpo;
-- 5 OK — reload 2× sem `Overwriting panel` nem `already registered`;
-- 4 **parcial** — os dois comandos WS respondem de ponta a ponta e os estáticos são servidos com
-  md5 idêntico ao repo, mas **o desenho na tela nunca foi visto**. Falta a sidebar renderizada e o
-  gráfico traçado.
+Estado conhecido (2026-08-02, `v0.1.1`): **passos 1–5 todos OK.** HACS `installed_version: v0.1.1`,
+entry `loaded`, log limpo, painel na sidebar, gráfico traçado (192 pontos num dia parcial, 288 num
+dia completo), console sem erro do painel, reload 2× sem `Overwriting panel`.
+
+Erro de console que **não é deste projeto** e vai aparecer: o card-mod (`/www/community/
+lovelace-card-mod/card-mod.js`) falha ao carregar e leva junto um `InvalidStateError` de transição.
+Não confunda com falha do painel.
 
 ## Exercitar os comandos WS sem browser
 

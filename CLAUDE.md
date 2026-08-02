@@ -109,8 +109,10 @@ release ele cairia para o branch default e a versão viraria o SHA do commit.
 
 Entry `01KZ02TX29DT3TPGX56BV0NC0G`, `state: loaded`, `options: {max_days: 15}`, HA 2026.7.4.
 
-Verificado: carga, os dois comandos WS de ponta a ponta, estáticos com md5 igual ao repo e reload
-2× sem `Overwriting panel`. **Não verificado: o desenho na tela** — rode `/ea-verify` passo 4.
+**Runtime provado por completo em 2026-08-02** (`/ea-verify` passos 1–5): painel na sidebar, custom
+element montado, os dois comandos WS de ponta a ponta, gráfico traçado com eixo e descarte
+corretos, triângulos ◀ ▶ deslocando as datas, console sem erro do painel, e reload 2× sem
+`Overwriting panel`.
 
 ## Ambiente
 

@@ -11,10 +11,15 @@
 
 ## Estado de verificação (2026-08-02, `v0.1.1`)
 
-Provado: integração carrega, entry `loaded`, os dois comandos WS respondem de ponta a ponta
-(`tree` e `series`, este último com SQL + regressão + descarte), estáticos servidos com md5 igual
-ao repo, e o ciclo de reload 2× não estoura `Overwriting panel` (invariante H3).
+**Runtime provado por completo**, passos 1–5 do `/ea-verify`: entry `loaded`; painel na sidebar com
+`mdi:chart-bell-curve-cumulative` e `require_admin`; `energy-analytics-panel` monta com shadow root
+e `_hass`; `tree` devolve as 33 linhas com a indentação da árvore; `series` desenha (192 pontos em
+1 dia parcial, 288 num dia completo) com eixo 00:00–24:00 e descarte no rodapé; ◀ ▶ deslocam as
+duas datas e redesenham; console sem erro do painel; reload 2× sem `Overwriting panel` (H3).
 
-**Não provado: o desenho.** A sidebar renderizada e o gráfico traçado nunca foram vistos — a
-extensão do Chrome não estava conectada e o Playwright cai na tela de login do HA. Ver `/ea-verify`
-passo 4.
+Regressão da v0.1.1 confirmada no navegador: campo de data vazio + clique em ▶ não lança nada e não
+desloca (invariante 8b).
+
+Ruído conhecido e **alheio a este projeto**: o console do HA acusa
+`Failed to fetch dynamically imported module: /www/community/lovelace-card-mod/card-mod.js` e um
+`InvalidStateError` de transição do frontend. É o card-mod, outra integração do HACS.
