@@ -107,12 +107,6 @@ const TEMPLATE = `
       <button class="tgl" id="tAvg">Média</button>
       <div class="sep"></div>
       <label class="f">Fonte <select id="source"></select></label>
-      <label class="f">Valor
-        <select id="mode">
-          <option value="delta">delta (kWh no intervalo)</option>
-          <option value="raw">bruto (odômetro)</option>
-        </select>
-      </label>
       <label class="f">Ajuste
         <select id="degree">
           <option value="auto">auto (grau 1–5)</option>
@@ -223,6 +217,19 @@ const parentOf = id => id.startsWith(SUM_PREFIX) ? id.slice(SUM_PREFIX.length)
 // guarda-se só a distância em dias entre elas, e ao abrir `Até` volta em hoje.
 const LS_KEY = 'energy-analytics.view.v1';
 
+// Interpolação linear em (xs, vs) ORDENADOS; fora do intervalo devolve null.
+// O tooltip do ECharts encosta no x da série mais densa (a curva, a cada `sample_min`), não na
+// grade dos pontos observados — casar minuto exato fazia a linha do Δ piscar ao mover o mouse.
+function interpAt(xs, vs, x){
+  const n = xs.length;
+  if (!n || x < xs[0] || x > xs[n-1]) return null;
+  let lo = 0, hi = n - 1;
+  while (hi - lo > 1){ const mid = (lo + hi) >> 1; if (xs[mid] <= x) lo = mid; else hi = mid; }
+  if (x === xs[lo]) return vs[lo];
+  const dx = xs[hi] - xs[lo];
+  return dx ? vs[lo] + (vs[hi] - vs[lo]) * (x - xs[lo]) / dx : vs[lo];
+}
+
 const _SLACK = 0.08;   // folga mínima (fração do intervalo) para a curva não colar no limite
 
 class EnergyAnalyticsPanel extends HTMLElement {
@@ -255,7 +262,7 @@ class EnergyAnalyticsPanel extends HTMLElement {
       localStorage.setItem(LS_KEY, JSON.stringify({
         sel: [...this.state.sel], pts: this.state.pts, curve: this.state.curve,
         avgUser: this.state.avgUser, span: this.state.span,
-        source: this.$('source').value, mode: this.$('mode').value, degree: this.$('degree').value,
+        source: this.$('source').value, degree: this.$('degree').value,
         eq: this.$('eqCard').style.display !== 'none',
       }));
     }catch(e){ /* sem persistência é degradação aceitável */ }
@@ -416,7 +423,7 @@ class EnergyAnalyticsPanel extends HTMLElement {
   }
 
   yKeyOf(){
-    return [this.$('from').value, this.$('to').value, this.$('mode').value,
+    return [this.$('from').value, this.$('to').value,
             this.state.pts ? 'pts' : 'sem-pts',
             [...this.state.sel].sort().join('+')].join('|');
   }
@@ -488,8 +495,8 @@ class EnergyAnalyticsPanel extends HTMLElement {
       if (this.state.curve) series.push({
         name: (d.degree === 'off' ? nm : 'Ajuste · ' + nm), type:'line', data: s.curve,
         showSymbol:false, itemStyle:{color: rgba(c, a)},
-        // `Σ filhos` herda a cor do pai: sem o tracejado as duas linhas seriam indistinguíveis.
-        lineStyle:{color: rgba(c, a), width:1.4, type: this.SYN[s.entity]==='sum' ? 'dashed':'solid'},
+        // Tracejado marca série DERIVADA (Σ filhos / untracked), não medida diretamente.
+        lineStyle:{color: rgba(c, a), width:1.4, type: this.SYN[s.entity] ? 'dashed' : 'solid'},
         emphasis:{disabled:true}, animation:false, z:3, silent: this.state.pts,
       });
     }
@@ -500,7 +507,7 @@ class EnergyAnalyticsPanel extends HTMLElement {
       series.push({
         name:'Média · ' + this.LABEL[m.entity], type:'line', data: m.curve,
         showSymbol:false, itemStyle:{color:c},
-        lineStyle:{color:c, width:3.2, type: this.SYN[m.entity]==='sum' ? 'dashed':'solid'},
+        lineStyle:{color:c, width:3.2, type: this.SYN[m.entity] ? 'dashed' : 'solid'},
         emphasis:{disabled:true}, animation:false, z:10,
       });
     }
@@ -516,13 +523,14 @@ class EnergyAnalyticsPanel extends HTMLElement {
         const ps = d.series.find(s => s.entity === parent && s.day === day);
         const ss = d.series.find(s => s.entity === id && s.day === day);
         if (!ps || !ss) continue;
-        const sum = new Map(ss.points), map = new Map();
+        const sum = new Map(ss.points), xs = [], vs = [];
         for (const [m, v] of ps.points){
           const o = sum.get(m);
-          if (o != null) map.set(m, v - o);
+          if (o != null){ xs.push(m); vs.push(v - o); }
         }
-        deltas.push({label: `Δ (${this.LABEL[parent]}, Σ filhos)`
-                            + (multi ? ' · ' + day : ''), color: this.COLOR[parent] || '#888', map});
+        if (!xs.length) continue;
+        deltas.push({label: `Δ (${this.LABEL[parent]}, Σ filhos)` + (multi ? ' · ' + day : ''),
+                     color: this.COLOR[parent] || '#888', xs, vs});
       }
     }
 
@@ -544,9 +552,10 @@ class EnergyAnalyticsPanel extends HTMLElement {
           const rows = p.filter(x=>x.data && x.data[1]!=null).slice(0,24)
             .map(x=>line(x.marker, x.seriesName, x.data[1])).join('');
           // Δ vai SEMPRE por último, depois de um filete separando do que é série desenhada.
-          const dl = deltas.filter(g => g.map.has(m)).map(g => line(
-            `<span style="display:inline-block;width:10px;height:0;border-top:2px dashed ${g.color};`
-            + `vertical-align:middle;margin-right:5px"></span>`, g.label, g.map.get(m))).join('');
+          const dl = deltas.map(g => [g, interpAt(g.xs, g.vs, m)]).filter(([, v]) => v != null)
+            .map(([g, v]) => line(
+              `<span style="display:inline-block;width:10px;height:0;border-top:2px dashed ${g.color};`
+              + `vertical-align:middle;margin-right:5px"></span>`, g.label, v)).join('');
           return `<div style="margin-bottom:4px">${hh}:${mm}</div>${rows}`
                + (dl ? `<div style="margin-top:4px;padding-top:4px;border-top:1px solid #2a2a2a">${dl}</div>` : '');
         },
@@ -578,7 +587,7 @@ class EnergyAnalyticsPanel extends HTMLElement {
       : '';
     this.$('msg').className = 'msg';
     this.$('msg').textContent = this.state.sel.size
-      ? `fonte ${d.source} · bucket ${d.step_min} min · ${d.mode}${drp}${miss}`
+      ? `fonte ${d.source} · bucket ${d.step_min} min · delta${drp}${miss}`
       : 'Selecione uma ou mais entidades à esquerda.';
   }
 
@@ -595,8 +604,7 @@ class EnergyAnalyticsPanel extends HTMLElement {
     try{
       const j = await this._ws('series', {
         from: f, to: t, entities: [...this.state.sel],
-        source: this.$('source').value, mode: this.$('mode').value,
-        degree: this.$('degree').value,
+        source: this.$('source').value, degree: this.$('degree').value,
       });
       if (seq !== this.state.seq) return;              // resposta obsoleta
       this.state.data = j;
@@ -705,7 +713,6 @@ class EnergyAnalyticsPanel extends HTMLElement {
 
     const reload = () => { this.saveView(); this.load(); };
     this.$('source').onchange = reload;
-    this.$('mode').onchange = reload;
     this.$('degree').onchange = reload;
 
     this.$('tEq').onclick = e => {
@@ -769,7 +776,7 @@ class EnergyAnalyticsPanel extends HTMLElement {
     if (typeof v.pts === 'boolean') this.state.pts = v.pts;
     if (typeof v.curve === 'boolean') this.state.curve = v.curve;
     if (v.avgUser === true || v.avgUser === false) this.state.avgUser = v.avgUser;
-    for (const [id, val] of [['source', v.source], ['mode', v.mode], ['degree', v.degree]]){
+    for (const [id, val] of [['source', v.source], ['degree', v.degree]]){
       if (val && [...this.$(id).options].some(o => o.value === val && !o.disabled)) {
         this.$(id).value = val;
       }

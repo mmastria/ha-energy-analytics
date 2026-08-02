@@ -21,8 +21,8 @@ carga de bateria são legitimamente negativos). O clamp em 0 existe **só** na f
 o negativo é reset de contador.
 
 **3b. Vazio em `states` = odômetro parado, não falta de dado.** Todo bucket sem linha é
-preenchido: `delta` → 0, `raw` → LOCF. Sem isso a curva do solar começava às 07:00 e terminava às
-17:30. Não preencher **antes da primeira amostra** da entidade (não há âncora) nem **depois de
+preenchido com **0** — não houve consumo. Sem isso a curva do solar começava às 07:00 e terminava
+às 17:30. Não preencher **antes da primeira amostra** da entidade (não há âncora) nem **depois de
 agora**.
 
 **3c. Contexto = `EXT_HOURS` horas COM DADO de cada lado** (`_with_context`), não recorte fixo de
@@ -52,7 +52,7 @@ série. A linha de média desenha **SEMPRE `m.curve`** — já houve o bug de el
 quando `Curva` estava desligada, mudando o traçado sem que nenhum dado mudasse.
 
 **8. Eixo Y é TRAVADO, com DOIS regimes.** `ensureY` recalcula só quando muda a chave
-`datas|modo|Pontos|entidades` (`state.yKey`):
+`datas|Pontos|entidades` (`state.yKey`):
 - com `Pontos`: régua sai dos pontos **MANTIDOS** + média (a curva do dia fica fora — seu envelope
   reintroduziria o descartado);
 - sem `Pontos`: sai das **CURVAS** (dias + média), visíveis ou não, com folga `_SLACK` nas duas

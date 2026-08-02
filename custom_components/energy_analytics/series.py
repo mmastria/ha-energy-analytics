@@ -9,7 +9,6 @@ Por isso ha dois modos:
   Fonte `statistics*`: delta da coluna `sum` (odometro canonico, imune a reset), SEM clamp —
   export/carga sao legitimamente negativos. Fonte `states`: delta do proprio `state`, com clamp
   em 0 (reset do contador viraria um negativo enorme).
-- `raw` — o valor lido, sem derivar. Util para 1 dia / inspecao do odometro.
 
 Ancoragem: o `lag` do primeiro bucket vem da ULTIMA amostra ANTES da janela (lookback de 1 dia),
 senao o primeiro bucket de cada janela perde o delta.
@@ -196,7 +195,7 @@ def _parse_selection(entities, tree):
 
 
 async def fetch(hass: HomeAssistant, tree: EnergyTree, entities, d_from, d_to,
-                source="states", mode="delta", degree="auto", max_days=const.DEFAULT_MAX_DAYS):
+                source="states", degree="auto", max_days=const.DEFAULT_MAX_DAYS):
     """Uma serie por (entidade, dia): pontos `[minuto_do_dia, valor]` na grade do `step`.
 
     Cada serie leva tambem a REGRESSAO (`curve` + `segments`): a linha desenhada e' o ajuste
@@ -207,8 +206,6 @@ async def fetch(hass: HomeAssistant, tree: EnergyTree, entities, d_from, d_to,
     if source not in SOURCES:
         raise ValueError(f"fonte invalida: {source}")
     table, step, _lab = SOURCES[source]
-    if mode not in ("delta", "raw"):
-        raise ValueError(f"modo invalido: {mode}")
     if d_to < d_from:
         d_from, d_to = d_to, d_from
     ndays = (d_to - d_from).days + 1
@@ -227,7 +224,7 @@ async def fetch(hass: HomeAssistant, tree: EnergyTree, entities, d_from, d_to,
     requested, needed, kids = _parse_selection(entities, tree)
     step_min = step // 60
     smp = 2 if step_min <= 5 else max(2, step_min // 4)
-    out = {"step_min": step_min, "mode": mode, "source": source, "unit": "kWh",
+    out = {"step_min": step_min, "source": source, "unit": "kWh",
            "degree": degree, "sample_min": smp,
            "days": [d.isoformat() for d in days], "series": [], "means": [], "missing": [],
            "dropped_total": 0}
@@ -251,11 +248,11 @@ async def fetch(hass: HomeAssistant, tree: EnergyTree, entities, d_from, d_to,
         rows = await _rows_stats(hass, table, ids, lo_q, hi_q, step)
 
     return await hass.async_add_executor_job(
-        _assemble, out, rows, by_id, requested, kids, days, tz, lo_q, hi_q, step, mode, source,
+        _assemble, out, rows, by_id, requested, kids, days, tz, lo_q, hi_q, step, source,
         degree, smp, step_min)
 
 
-def _assemble(out, rows, by_id, requested, kids, days, tz, lo_q, hi_q, step, mode, source,
+def _assemble(out, rows, by_id, requested, kids, days, tz, lo_q, hi_q, step, source,
               degree, smp, step_min):
     """Parte de CPU: bucketizacao, preenchimento, contexto e regressao. Roda no executor geral."""
     nbk = int(math.ceil((hi_q - lo_q) / step))
@@ -270,19 +267,19 @@ def _assemble(out, rows, by_id, requested, kids, days, tz, lo_q, hi_q, step, mod
             continue
         if bk >= nbk:
             continue
-        value = v if mode == "raw" else d
+        value = d
         if value is None:
             continue
-        if mode == "delta" and source == "states" and value < 0:
+        if source == "states" and value < 0:
             value = 0.0                  # reset do contador total_increasing
         grid.setdefault(entity, {})[bk] = round(float(value), 4)
 
     # ---- preenchimento dos vazios -----------------------------------------------------
     # A ausencia de linha em `states` NAO e' ausencia de informacao: o odometro nao mudou.
     # Solar de madrugada, tomada desligada, aparelho parado — todos param de gravar e o
-    # grafico ficava com a curva comecando as 07:00. Vazio => delta 0 (sem consumo) no modo
-    # `delta`, ultimo valor conhecido no modo `bruto`. Nao se inventa dado antes da primeira
-    # amostra da entidade (sem ancora) nem depois de AGORA (o dia de hoje ainda nao aconteceu).
+    # grafico ficava com a curva comecando as 07:00. Vazio => delta 0: nao houve consumo. Nao se
+    # inventa dado antes da primeira amostra da entidade (sem ancora) nem depois de AGORA (o dia
+    # de hoje ainda nao aconteceu).
     now_bk = int((dt.datetime.now(tz).timestamp() - lo_q) // step)
     for entity, g in grid.items():
         ks = sorted(g)
@@ -290,15 +287,8 @@ def _assemble(out, rows, by_id, requested, kids, days, tz, lo_q, hi_q, step, mod
             continue
         start = 0 if entity in anchor else ks[0]
         end = min(nbk - 1, now_bk)
-        last = anchor.get(entity, (None, None))[1]
         for bk in range(start, end + 1):
-            if bk in g:
-                last = g[bk]
-                continue
-            if mode == "delta":
-                g[bk] = 0.0
-            elif last is not None:
-                g[bk] = last
+            g.setdefault(bk, 0.0)
 
     # ---- series sinteticas: `Σ filhos` e `(untracked)` ---------------------------------
     # Nascem AQUI, sobre a grade ja' preenchida e antes da divisao por dia, para percorrerem
@@ -372,7 +362,7 @@ def _assemble(out, rows, by_id, requested, kids, days, tz, lo_q, hi_q, step, mod
         ndrop += len(drop)
         out["series"].append({
             "entity": entity, "day": day, "points": points, "dropped": sorted(drop),
-            "total": round(sum(v for m, v in ext if _in_day(m)), 4) if mode == "delta" else None,
+            "total": round(sum(v for m, v in ext if _in_day(m)), 4),
             **reg,
         })
         a = acc.setdefault(entity, {})

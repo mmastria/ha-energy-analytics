@@ -54,7 +54,6 @@ async def ws_tree(hass: HomeAssistant, connection, msg) -> None:
     vol.Required("from"): str,
     vol.Required("to"): str,
     vol.Optional("source", default="states"): str,
-    vol.Optional("mode", default="delta"): str,
     vol.Optional("degree", default="auto"): str,
 })
 @websocket_api.async_response
@@ -69,7 +68,7 @@ async def ws_series(hass: HomeAssistant, connection, msg) -> None:
     try:
         tree = await async_get_tree(hass)
         result = await series.fetch(hass, tree, msg["entities"], d_from, d_to,
-                                    msg["source"], msg["mode"], msg["degree"],
+                                    msg["source"], msg["degree"],
                                     max_days=_max_days(hass))
     except ValueError as err:
         connection.send_error(msg["id"], "invalid_request", str(err))

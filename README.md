@@ -38,7 +38,7 @@ Requisitos: HA **2026.7+**, painel de **Energia** já configurado (fontes `grid`
   31/07 ↑ vira 01/08 e 01/01 ↓ vira 31/12 do ano anterior; no segmento do mês, 12 ↑ vira 01 do ano
   seguinte. (O `input[type=date]` nativo gira cada segmento dentro do seu pai; o painel detecta o
   estouro e reescreve a data.) Na borda da janela o passo simplesmente não anda.
-- **Botões** `Pontos` / `Curva` / `Média` (on/off) e os seletores `Fonte` / `Valor` / `Ajuste`.
+- **Botões** `Pontos` / `Curva` / `Média` (on/off) e os seletores `Fonte` / `Ajuste`.
 - **A seleção e a configuração voltam como estavam** na próxima vez que a tela abrir. As **datas
   não** são salvas: guarda-se a **distância em dias** entre elas, e ao abrir `Até` volta em **hoje**
   com `De` recuando essa distância.
@@ -66,7 +66,7 @@ Um sensor de energia **para de gravar** quando o valor não muda: o solar não t
 entre 17:30 e 07:00, a secadora fica dias sem linha. Isso **não** é ausência de informação — é
 consumo zero. Sem esse tratamento a curva do solar começava às 07:00 e terminava às 17:30.
 
-Todo bucket vazio é preenchido: **`delta` → 0**, **`bruto` → último valor conhecido**. O
+Todo bucket vazio é preenchido com **0** — não houve consumo. O
 preenchimento não inventa dado **antes da primeira amostra** da entidade nem **depois de agora**
 (por isso a curva de hoje termina no horário atual).
 
@@ -105,7 +105,7 @@ Medido em 12 dias (5 min): rede 170/3456 descartados, solar 96/3456 (pico real d
 
 A régua vertical **não muda** ao ligar/desligar `Curva` ou `Média`, ao trocar de **fonte** nem ao
 mudar o **grau**: comparar dois desenhos exige a mesma régua. Ela é recalculada quando mudam as
-**datas**, as **entidades**, o **modo do valor** (`delta` ↔ `bruto`) ou o botão **`Pontos`**:
+**datas**, as **entidades** ou o botão **`Pontos`**:
 
 | `Pontos` | régua calculada sobre | base |
 |---|---|---|
@@ -132,7 +132,7 @@ do painel de Energia — presa à entidade, nunca à ordem do gráfico. Fontes u
 
 Reordenar os devices no painel de Energia **troca todas as cores** — é a mesma regra do HA.
 
-## Fonte × Valor
+## Fonte
 
 As entidades do painel de Energia são **odômetros** (`total_increasing`, kWh acumulado).
 
@@ -142,10 +142,13 @@ As entidades do painel de Energia são **odômetros** (`total_increasing`, kWh a
 | `statistics_short_term (5 min)` | `statistics_short_term` | 5 min |
 | `statistics (1 h)` | `statistics` | 1 h |
 
-| Valor | o que plota |
-|---|---|
-| `delta` (default) | energia **no** bucket = valor − valor do bucket anterior. É a única leitura sobreponível dia a dia e a única em que a média tem sentido. Nas fontes `statistics*` o delta vem da coluna `sum` (odômetro canônico, imune a reset) e **não** é clampado; em `states` vem do próprio `state`, com clamp em 0 (reset do contador). |
-| `raw` | o valor lido, sem derivar (inspeção do odômetro). |
+O que se plota é **sempre o `delta`**: a energia **no** bucket = valor − valor do bucket
+anterior. É a única leitura sobreponível dia a dia e a única em que a média tem sentido — o valor
+cru do odômetro cresce centenas de kWh entre dias e nenhuma curva cairia no mesmo eixo.
+
+Nas fontes `statistics*` o delta vem da coluna `sum` (odômetro canônico, imune a reset) e **não** é
+clampado — export e carga de bateria são negativos legítimos. Em `states` vem do próprio `state`,
+com clamp em 0 (reset do contador viraria um negativo enorme).
 
 O `lag` do primeiro bucket é ancorado na **última amostra antes da janela** (lookback de 1 dia),
 senão o primeiro bucket de cada janela perderia o delta.
@@ -174,7 +177,7 @@ o tooltip ganha na última linha `Δ (pai, Σ filhos)`.
   max_days, min_date, today}`. Nó com filhos gera duas linhas extras, que trazem também
   `{parent, synthetic: "sum"|"untracked"}` e cujo `entity` **não é um `entity_id`**:
   `sum:<pai>` (soma dos filhos **diretos**) e `untracked:<pai>` (pai − essa soma).
-- `energy_analytics/series` — `{entities[], from, to, source, mode, degree}` →
+- `energy_analytics/series` — `{entities[], from, to, source, degree}` →
   `{step_min, sample_min, days[], unit, degree,
   series[{entity, day, points[[min,val]], curve[[min,val]], dropped[], segments[], total}],
   means[{entity, points, curve, segments, days}], missing[], dropped_total}`;

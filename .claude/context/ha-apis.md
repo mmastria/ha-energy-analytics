@@ -90,8 +90,10 @@ token, sem CORS, sem token expirando no meio da sessão. No front: `hass.callWS(
 ## Contrato dos dois comandos
 
 - `energy_analytics/tree` →
-  `{nodes: [{entity,label,color,depth,group,children}], sources[], max_days, min_date, today}`
-- `energy_analytics/series` — params `{entities[], from, to, source, mode, degree}` →
+  `{nodes: [{entity,label,color,depth,group,children}], sources[], max_days, min_date, today}`.
+  Nó com filhos gera duas linhas extras com `{parent, synthetic: "sum"|"untracked"}`, cujo `entity`
+  **não é `entity_id`**: `sum:<pai>` e `untracked:<pai>`.
+- `energy_analytics/series` — params `{entities[], from, to, source, degree}` →
   ```
   {step_min, sample_min, days[], unit, degree,
    series: [{entity, day, points[[min,val]], curve[[min,val]], dropped[], segments[], total}],
