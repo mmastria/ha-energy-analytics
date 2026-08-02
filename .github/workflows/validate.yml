@@ -16,6 +16,10 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
+          # `brands` valida a inclusão na loja default do HACS, que não é objetivo
+          # deste projeto (instalação é como repositório custom). Ver
+          # .claude/context/decisions.md — alcance pessoal, sem PR no home-assistant/brands.
+          ignore: brands
 
   hassfest:
     name: hassfest
