@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(wc:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(md5:*)",
+      "Bash(diff:*)",
+      "Bash(node --check:*)",
+      "Bash(python3 -m py_compile:*)",
+      "Bash(python3 -m json.tool:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git rev-parse:*)",
+      "mcp__ha-mcp__ha_get_overview",
+      "mcp__ha-mcp__ha_get_state",
+      "mcp__ha-mcp__ha_get_entity",
+      "mcp__ha-mcp__ha_get_history",
+      "mcp__ha-mcp__ha_get_statistics",
+      "mcp__ha-mcp__ha_get_logs",
+      "mcp__ha-mcp__ha_get_system_health",
+      "mcp__ha-mcp__ha_get_integration",
+      "mcp__ha-mcp__ha_search",
+      "mcp__ha-mcp__ha_manage_energy_prefs",
+      "mcp__ha-mcp__ha_get_hacs_info"
+    ],
+    "deny": [
+      "Write(./custom_components/energy_analytics/www/echarts.esm.min.js)",
+      "Edit(./custom_components/energy_analytics/www/echarts.esm.min.js)"
+    ]
+  }
+}

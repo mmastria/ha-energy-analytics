@@ -2,3 +2,16 @@ __pycache__/
 *.py[cod]
 .venv/
 .DS_Store
+
+# saídas regeneráveis do harness
+.claude/output/*
+!.claude/output/.gitkeep
+
+# nunca versionar credencial de MCP
+# .mcp.json carrega o token do proxy do HA no próprio URL — este repo é público
+.mcp.json
+.mcp.local.json
+.claude/settings.local.json
+
+# buffer do plugin remember
+.remember/

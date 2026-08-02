@@ -9,7 +9,7 @@ totais por dia/mês/ano use o painel de Energia oficial do HA.
 ## Instalação (HACS)
 
 1. HACS → Integrações → ⋮ → **Repositórios personalizados**
-2. URL `https://github.com/mastria/ha-energy-analytics`, categoria **Integration** → Adicionar
+2. URL `https://github.com/mmastria/ha-energy-analytics`, categoria **Integration** → Adicionar
 3. Baixar **Energy Analytics** → **reiniciar o HA**
 4. Configurações → Dispositivos e serviços → **Adicionar integração** → *Energy Analytics*
 
