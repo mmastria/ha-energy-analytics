@@ -87,6 +87,6 @@ O `ha_call_service` tem escape hatch de WebSocket cru — resolve o passo 4 meno
 ha_call_service(ws_command="energy_analytics/tree")
 ha_call_service(ws_command="energy_analytics/series",
                 data={"entities": ["sensor.pwm_grid_energy"], "from": "...", "to": "...",
-                      "source": "statistics", "mode": "delta", "degree": "auto"})
+                      "source": "statistics", "degree": "auto"})
 ```
 E o passo 5 sai por `homeassistant.reload_config_entry` com `entry_id`, 2×, conferindo o log depois.

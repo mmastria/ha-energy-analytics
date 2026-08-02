@@ -43,7 +43,7 @@ await document.querySelector("energy-analytics-panel")._hass.callWS({
   type: "energy_analytics/series",
   entities: ["sensor.pwm_grid_energy"],
   from: "2026-07-30", to: "2026-07-31",
-  source: "statistics", mode: "delta", degree: "auto",
+  source: "statistics", degree: "auto",
 })
 ```
 Salve o resultado em `.claude/output/parity_ws.json`.

@@ -6,7 +6,8 @@ Carregue a skill **`ea-parity-check`** e siga-a.
 
 `$ARGUMENTS` — opcional: `<entity_id> <YYYY-MM-DD> <YYYY-MM-DD>`.
 Default: `sensor.pwm_grid_energy` nos dois últimos dias completos, `source=statistics`,
-`mode=delta`, `degree=auto`.
+`degree=auto`. O **oráculo ainda tem** o parâmetro `mode` na URL (é a API dele); a integração
+**não** — o schema do WS rejeita chave extra, então mandar `mode` para ela dá erro.
 
 Lembretes:
 - o oráculo roda em `~/wrk/homeassistant/analytics/` — **outro repo**, `./localrun.sh`, porta 8766;
