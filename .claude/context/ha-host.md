@@ -46,11 +46,16 @@ edita aqui → checagem estática → git commit → git push origin main
 **não existe** (404) — `documentation` e `issue_tracker` do manifest apontando para lá reprovam na
 `hacs/action`.
 
-## Versões (conferidas 2026-08-02)
+## Versões (conferidas 2026-08-02 por `ha_get_system_health`)
 
-- Home Assistant Core **2026.7.4** (`update_available: false`), amd64, Supervisor/HAOS.
+- Home Assistant Core **2026.7.4**, instalação **Supervised**, amd64, Debian 12, Supervisor
+  2026.07.5.
+- **Python 3.14.6** — `health_info.data.homeassistant.info.python_version`. **É o número que o
+  `.venv` local tem que espelhar** (regra 10 / `/ea-env`): é este interpretador que executa a
+  integração.
 - HACS **2.0.5**.
-- Recorder = **PostgreSQL + TimescaleDB** (por isso `DISTINCT ON` e `~` são aceitáveis).
+- Recorder = **PostgreSQL 17.6** + TimescaleDB (por isso `DISTINCT ON` e `~` são aceitáveis),
+  base com ~47,7 GiB.
 
 ## Outras integrações custom instaladas
 

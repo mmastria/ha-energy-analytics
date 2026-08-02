@@ -35,6 +35,12 @@ A curva desenhada é **regressão polinomial por trecho** (OLS, grau por AICc), 
 8. **Git aqui é normal** (o bloqueio de git é hook do outro repo, não deste).
 9. **SQL é Postgres-only** (`DISTINCT ON`, operador de regex `~`). O recorder de produção é
    TimescaleDB/Postgres e isso é decisão aceita — não "portar para SQLite".
+10. **Python local = `uv`, na versão do HA. SEMPRE.** Nada de `python3` do sistema: todo código
+    Python que rodar aqui — validação, exercício do `fit.py`, script solto — vai por
+    **`uv run`**. O interpretador do `.venv` tem que ser o **mesmo que o HA executa**
+    (`python_version` do system health; hoje **3.14.6**), porque é ele que roda a integração —
+    validar noutro é validar contra alvo que não existe. Antes de mexer, confira com **`/ea-env`**;
+    quando o HA mudar de versão, o `/ea-env` apaga o `.venv` e o recria na versão nova.
 
 ## Comandos
 
@@ -43,9 +49,9 @@ oráculo + prova de runtime**.
 
 ```bash
 # checagem estática — a única porta antes do push
-python3 -m py_compile custom_components/energy_analytics/*.py
-python3 -m json.tool custom_components/energy_analytics/manifest.json >/dev/null
-python3 -m json.tool hacs.json >/dev/null
+uv run python -m py_compile custom_components/energy_analytics/*.py
+uv run python -m json.tool custom_components/energy_analytics/manifest.json >/dev/null
+uv run python -m json.tool hacs.json >/dev/null
 node --check custom_components/energy_analytics/www/panel.js
 ```
 
@@ -53,6 +59,7 @@ CI (`.github/workflows/validate.yml`): só `hacs/action` + `hassfest`. Nenhum ro
 
 | slash | faz |
 |---|---|
+| `/ea-env` | confere o Python do `.venv` contra o do HA; recria se divergir |
 | `/ea-deploy` | push + `ha_manage_hacs(download)` + restart (com confirmação) |
 | `/ea-verify [quick\|full]` | prova de runtime: carregou, painel na sidebar, os 2 comandos WS respondem |
 | `/ea-logs [n]` | logs do HA filtrados pela integração (`ha_get_logs`) |
@@ -116,11 +123,16 @@ corretos, triângulos ◀ ▶ deslocando as datas, console sem erro do painel, e
 
 ## Ambiente
 
-- Este repo **não tem venv nem dependências próprias**: o código roda dentro do HA, com as libs do
-  HA (`sqlalchemy`, `voluptuous`). `manifest.json` tem `requirements: []` de propósito.
+- **`uv` é obrigatório** (regra 10). `.venv` travado em **3.14.6** = o Python do HA; `pyproject.toml`
+  fixa `requires-python`, e `.python-version` + `uv.lock` são versionados. O `.venv` é descartável:
+  `uv sync` refaz. Conferir/recriar: **`/ea-env`**.
+- A integração **não tem dependência própria**: roda dentro do HA, com as libs do HA (`sqlalchemy`,
+  `voluptuous`). `manifest.json` tem `requirements: []` e o `pyproject.toml`, `dependencies = []` —
+  o venv local existe para **rodar e validar**, não para empacotar.
 - **A máquina de trabalho é só este repo.** O servidor do HA é caixa-preta acessível por MCP; não
   há caminho de arquivo do host que se possa ler, copiar ou comparar por md5.
-- `fit.py` é puro `math`/`statistics` — dá para exercitá-lo com o `python3` do sistema.
+- `fit.py` é puro `math`/`statistics` — dá para exercitá-lo direto, mas **sempre** por
+  `uv run python`.
 - O oráculo de `/ea-parity` é uma implementação de referência que roda fora daqui
   (`~/wrk/homeassistant/analytics/`, `./localrun.sh`, porta 8766) — **outro repo, outro escopo**.
 - Requisitos de runtime: HA **2026.7+**, painel de **Energia** já configurado (`grid`, `solar`,

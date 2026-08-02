@@ -1,7 +1,10 @@
 __pycache__/
 *.py[cod]
-.venv/
 .DS_Store
+
+# ambiente local do uv — recriável por `uv sync`. O `uv.lock` e o `.python-version` SÃO
+# versionados: são eles que amarram o interpretador local ao do HA.
+.venv/
 
 # saídas regeneráveis do harness
 .claude/output/*

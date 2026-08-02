@@ -23,9 +23,9 @@ arquivo — o `.mcp.json` carrega só o `ha-mcp`. Logo, **o `git push` é o depl
 ### 1. Checagem estática antes de empurrar
 ```bash
 cd ~/wrk/ha-energy-analytics
-python3 -m py_compile custom_components/energy_analytics/*.py
-python3 -m json.tool custom_components/energy_analytics/manifest.json >/dev/null
-python3 -m json.tool hacs.json >/dev/null
+uv run python -m py_compile custom_components/energy_analytics/*.py
+uv run python -m json.tool custom_components/energy_analytics/manifest.json >/dev/null
+uv run python -m json.tool hacs.json >/dev/null
 node --check custom_components/energy_analytics/www/panel.js
 ```
 Qualquer um falhando: **pare**, conserte, não empurre.

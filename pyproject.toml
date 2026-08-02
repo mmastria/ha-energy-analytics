@@ -1,0 +1,17 @@
+[project]
+name = "ha-energy-analytics"
+version = "0.3.0"
+description = "Painel do Home Assistant com perfis diários de 24 h das entidades do painel de Energia"
+readme = "README.md"
+# TRAVADO na mesma versão que o HA de produção roda (system health -> homeassistant.python_version).
+# A integração é executada pelo interpretador do HA: validar com outra versão aqui é validar contra
+# um alvo que não existe. Ver `/ea-env` e a regra 10 do CLAUDE.md.
+requires-python = "==3.14.*"
+
+# Vazio de propósito, igual ao `requirements: []` do manifest.json: a integração roda dentro do HA,
+# com as libs do HA (sqlalchemy, voluptuous). Nada aqui é empacotado nem enviado.
+dependencies = []
+
+[tool.uv]
+# Projeto "virtual": o .venv existe para RODAR e VALIDAR código local, não para construir pacote.
+package = false

@@ -14,7 +14,7 @@ context/     conhecimento estável — leia conforme a tarefa
 
 agents/      ea-panel-frontend · ea-backend-data · ea-integration-reviewer
 skills/      ea-deploy · ea-parity-check · ea-panel-edit · ea-release
-commands/    /ea-deploy /ea-verify /ea-logs /ea-parity /ea-release
+commands/    /ea-env /ea-deploy /ea-verify /ea-logs /ea-parity /ea-release
 output/      saídas regeneráveis — gitignored
 settings.json  permissões (leitura/checagem liberadas; vendor do ECharts negado)
 ```

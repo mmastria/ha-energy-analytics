@@ -9,6 +9,7 @@ Comece aqui em tarefa não-trivial. Regras duras estão no `CLAUDE.md` da raiz.
 | mudar cor, eixo, controle, layout, interação do painel | agente **`ea-panel-frontend`** + skill **`ea-panel-edit`** |
 | número errado, série vazia/deslocada, SQL, contrato do WS | agente **`ea-backend-data`** |
 | revisar antes de release / o HA reclamou no log | agente **`ea-integration-reviewer`** |
+| garantir o Python local igual ao do HA | **`/ea-env`** (antes de rodar qualquer Python) |
 | levar a mudança para o HA rodando | **`/ea-deploy`** (skill `ea-deploy`) — push → HACS → restart |
 | provar que está funcionando de verdade | **`/ea-verify`** |
 | investigar erro no HA | **`/ea-logs`** |
@@ -45,8 +46,16 @@ O que não vale trazer de lá: o `uv` daquele workspace, e o vocabulário de `st
 `timescaledb/` — lá esses nomes são um **mirror local reconstruído**; aqui são as tabelas do
 **recorder de produção**.
 
-## Coisas que não existem aqui
+## Ambiente Python — `uv`, na versão do HA
 
-Sem venv, sem `uv`, sem dependência própria (`requirements: []` de propósito) — o código roda com
-as libs do HA. Sem testes automatizados: a verificação é paridade contra o oráculo + prova de
-runtime. `fit.py` é puro `math`/`statistics` e dá para exercitar com o `python3` do sistema.
+**Todo** Python daqui roda por **`uv run`**; `python3` do sistema é proibido (regra 10 do
+`CLAUDE.md`). O `.venv` é travado no mesmo interpretador que o HA executa — hoje **3.14.6**, lido de
+`ha_get_system_health().homeassistant.info.python_version`. É esse interpretador que roda a
+integração; validar noutro é validar contra alvo que não existe.
+
+Quando o HA subir de versão, **`/ea-env`** compara, apaga o `.venv` e recria na versão nova
+(`uv python pin` → `rm -rf .venv` → `uv sync`). `.python-version` e `uv.lock` são versionados; o
+`.venv` não.
+
+Sem dependência própria (`requirements: []` no manifest, `dependencies = []` no pyproject) e sem
+teste automatizado: a verificação é paridade contra o oráculo + prova de runtime.

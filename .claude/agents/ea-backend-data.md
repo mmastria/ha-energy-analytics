@@ -40,7 +40,7 @@ editar qualquer coisa.**
    bug seu, não do `fit`.
 3. Mudou o contrato do WS? Atualize a seção "API (WebSocket)" do `README.md` **e**
    `.claude/context/ha-apis.md` na mesma passada — o contrato não mora em `/api/docs` mais.
-4. `python3 -m py_compile` nos módulos antes de entregar.
+4. `uv run python -m py_compile` nos módulos antes de entregar.
 
 ## Não conclua sem prova
 
