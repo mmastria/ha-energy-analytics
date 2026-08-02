@@ -8,6 +8,7 @@ from __future__ import annotations
 from homeassistant.core import HomeAssistant
 
 from . import labels, palette
+from .const import SUM_PREFIX, UNTRACKED_PREFIX
 from .energy_tree import EnergyTree
 
 
@@ -40,10 +41,35 @@ def _node(hass: HomeAssistant, tree: EnergyTree, entity: str, depth: int, group:
     }
 
 
+def _synthetic(tree: EnergyTree, parent: str, depth: int, kind: str) -> dict:
+    """Linha derivada de um no com filhos — nao e' entidade do HA.
+
+    `sum` herda a cor do pai (o front a desenha TRACEJADA, para nao se confundir com a linha
+    do proprio pai); `untracked` usa o cinza de "nao monitorado" do HA.
+    """
+    is_sum = kind == "sum"
+    return {
+        "entity": (SUM_PREFIX if is_sum else UNTRACKED_PREFIX) + parent,
+        "label": "Σ filhos" if is_sum else "(untracked)",
+        "color": color(tree, parent) if is_sum else palette.UNTRACKED,
+        "depth": depth,
+        "group": "device",
+        "children": 0,
+        "parent": parent,     # so' e' selecionavel com o pai seleciona
+        "synthetic": kind,
+    }
+
+
 def _walk(hass: HomeAssistant, tree: EnergyTree, entity: str, depth: int, out: list) -> None:
     out.append(_node(hass, tree, entity, depth, "device"))
-    for child in tree.CHILDREN.get(entity, []):
+    kids = tree.CHILDREN.get(entity, [])
+    if kids:
+        # `Σ filhos` abre a lista de filhos, `(untracked)` a fecha — ambos no nivel dos filhos.
+        out.append(_synthetic(tree, entity, depth + 1, "sum"))
+    for child in kids:
         _walk(hass, tree, child, depth + 1, out)
+    if kids:
+        out.append(_synthetic(tree, entity, depth + 1, "untracked"))
 
 
 def nodes(hass: HomeAssistant, tree: EnergyTree) -> list[dict]:

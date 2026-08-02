@@ -31,6 +31,11 @@ const STYLE = `
   .row.on .sw{opacity:1}
   .row .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .row.dim .nm{color:var(--fg-dim)}
+  /* Σ filhos / (untracked): derivadas do pai, só selecionáveis com o pai selecionado. */
+  .row.syn .nm{font-style:italic}
+  .row.locked{opacity:.4;cursor:default}
+  .row.locked:hover{background:none}
+  .row.locked input{cursor:default}
   .main{flex:1;display:flex;flex-direction:column;gap:16px;min-width:0}
   .bar{background:var(--card);border:1px solid var(--divider);border-radius:var(--radius);
        padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
@@ -208,6 +213,16 @@ function addMonths(iso, n){
        + String(Math.min(d, last)).padStart(2,'0');
 }
 
+// Séries SINTÉTICAS de um nó com filhos (ver const.py). O id não é entity_id: é prefixo + o
+// entity_id do pai.
+const SUM_PREFIX = 'sum:', UNTRACKED_PREFIX = 'untracked:';
+const parentOf = id => id.startsWith(SUM_PREFIX) ? id.slice(SUM_PREFIX.length)
+                     : id.startsWith(UNTRACKED_PREFIX) ? id.slice(UNTRACKED_PREFIX.length) : null;
+
+// Seleção + configuração de visualização sobrevivem a recarga/troca de tela. As DATAS não:
+// guarda-se só a distância em dias entre elas, e ao abrir `Até` volta em hoje.
+const LS_KEY = 'energy-analytics.view.v1';
+
 const _SLACK = 0.08;   // folga mínima (fração do intervalo) para a curva não colar no limite
 
 class EnergyAnalyticsPanel extends HTMLElement {
@@ -217,7 +232,8 @@ class EnergyAnalyticsPanel extends HTMLElement {
     this._booted = false;
     this._chart = null;
     this._dtTimer = null;
-    this.NODES = []; this.COLOR = {}; this.LABEL = {};
+    this.NODES = []; this.COLOR = {}; this.LABEL = {}; this.SYN = {};
+    this._rows = new Map();   // entity -> {row, cb} para acender/apagar as sintéticas do pai
     this.MAX_DAYS = 60; this.MIN_DATE = '2024-01-01'; this.MAX_DATE = null;
     this.YDEC = 2;
     this.state = {
@@ -227,7 +243,26 @@ class EnergyAnalyticsPanel extends HTMLElement {
       data: null, seq: 0,
       y: {min:null, max:null, scale:true},   // escala travada
       yKey: null,                            // datas + entidades + modo que geraram `y`
+      span: 0,                               // distância em dias entre `De` e `Até` (persistida)
     };
+  }
+
+  /* ---------- estado persistido --------------------------------------------------------- */
+  // Só o que o usuário escolheu; nada de dado nem de datas absolutas. Falha de localStorage
+  // (modo privativo, quota) não pode derrubar o painel — daí o try/catch dos dois lados.
+  saveView(){
+    try{
+      localStorage.setItem(LS_KEY, JSON.stringify({
+        sel: [...this.state.sel], pts: this.state.pts, curve: this.state.curve,
+        avgUser: this.state.avgUser, span: this.state.span,
+        source: this.$('source').value, mode: this.$('mode').value, degree: this.$('degree').value,
+        eq: this.$('eqCard').style.display !== 'none',
+      }));
+    }catch(e){ /* sem persistência é degradação aceitável */ }
+  }
+
+  readView(){
+    try{ return JSON.parse(localStorage.getItem(LS_KEY)) || null; }catch(e){ return null; }
   }
 
   // `set hass` dispara a CADA mudança de estado do HA (dezenas por segundo nesta casa).
@@ -262,8 +297,28 @@ class EnergyAnalyticsPanel extends HTMLElement {
   }
 
   /* ---------- árvore -------------------------------------------------------------------- */
+  // Classe da linha em um lugar só: `renderTree` e `syncSynthetic` têm que concordar.
+  rowClass(n, checked, locked){
+    return 'row' + (n.synthetic ? ' syn' : '') + (checked ? ' on' : ' dim') + (locked ? ' locked' : '');
+  }
+
+  // Σ filhos e (untracked) são derivadas: sem o pai selecionado elas não têm o que derivar.
+  // Desmarcar o pai desmarca e trava as duas. Mexe SÓ nas duas linhas — re-renderizar a árvore
+  // aqui trocaria o input sob o <label> e o clique voltaria desmarcado (invariante 9).
+  syncSynthetic(parent){
+    const on = this.state.sel.has(parent);
+    for (const id of [SUM_PREFIX + parent, UNTRACKED_PREFIX + parent]){
+      const r = this._rows.get(id);
+      if (!r) continue;
+      if (!on){ this.state.sel.delete(id); r.cb.checked = false; }
+      r.cb.disabled = !on;
+      r.row.className = this.rowClass(r.node, r.cb.checked, !on);
+    }
+  }
+
   renderTree(){
     const box = this.$('tree'); box.innerHTML = '';
+    this._rows.clear();
     let group = null;
     for (const n of this.NODES){
       if (n.group !== group){
@@ -272,19 +327,26 @@ class EnergyAnalyticsPanel extends HTMLElement {
         h.className = 'grp'; h.textContent = group === 'source' ? 'Fontes' : 'Dispositivos';
         box.appendChild(h);
       }
+      const locked = !!n.synthetic && !this.state.sel.has(n.parent);
+      if (locked) this.state.sel.delete(n.entity);      // pai desmarcado: derivada não sobrevive
       const row = document.createElement('label');
-      row.className = 'row' + (this.state.sel.has(n.entity) ? ' on' : ' dim');
+      row.className = this.rowClass(n, this.state.sel.has(n.entity), locked);
       row.style.paddingLeft = (16 + n.depth * 18) + 'px';
-      row.title = n.entity;
+      row.title = n.synthetic === 'sum' ? `soma dos filhos diretos de ${n.parent}`
+                : n.synthetic === 'untracked' ? `${n.parent} − soma dos filhos diretos`
+                : n.entity;
       const cb = document.createElement('input');
-      cb.type = 'checkbox'; cb.checked = this.state.sel.has(n.entity);
+      cb.type = 'checkbox'; cb.checked = this.state.sel.has(n.entity); cb.disabled = locked;
       // Só a classe da própria linha muda aqui: re-renderizar a árvore DENTRO do dispatch do
       // clique troca o input sob o <label>, e o label re-dispara o toggle (desmarca de volta).
       cb.onchange = () => {
         cb.checked ? this.state.sel.add(n.entity) : this.state.sel.delete(n.entity);
-        row.className = 'row' + (cb.checked ? ' on' : ' dim');
+        row.className = this.rowClass(n, cb.checked, false);
+        if (n.children) this.syncSynthetic(n.entity);
+        this.saveView();
         this.load();
       };
+      this._rows.set(n.entity, {row, cb, node: n});
       const sw = document.createElement('span');
       sw.className = 'sw'; sw.style.background = n.color;
       const nm = document.createElement('span');
@@ -425,7 +487,9 @@ class EnergyAnalyticsPanel extends HTMLElement {
       }
       if (this.state.curve) series.push({
         name: (d.degree === 'off' ? nm : 'Ajuste · ' + nm), type:'line', data: s.curve,
-        showSymbol:false, lineStyle:{color: rgba(c, a), width:1.4}, itemStyle:{color: rgba(c, a)},
+        showSymbol:false, itemStyle:{color: rgba(c, a)},
+        // `Σ filhos` herda a cor do pai: sem o tracejado as duas linhas seriam indistinguíveis.
+        lineStyle:{color: rgba(c, a), width:1.4, type: this.SYN[s.entity]==='sum' ? 'dashed':'solid'},
         emphasis:{disabled:true}, animation:false, z:3, silent: this.state.pts,
       });
     }
@@ -435,9 +499,31 @@ class EnergyAnalyticsPanel extends HTMLElement {
       const c = this.COLOR[m.entity] || '#888';
       series.push({
         name:'Média · ' + this.LABEL[m.entity], type:'line', data: m.curve,
-        showSymbol:false, lineStyle:{color:c, width:3.2}, itemStyle:{color:c},
+        showSymbol:false, itemStyle:{color:c},
+        lineStyle:{color:c, width:3.2, type: this.SYN[m.entity]==='sum' ? 'dashed':'solid'},
         emphasis:{disabled:true}, animation:false, z:10,
       });
+    }
+
+    // Δ (pai, Σfilhos) do tooltip: é a mesma conta do `(untracked)`, mostrada mesmo quando
+    // aquela linha não está ligada — quem ligou a Σ quer saber o que sobrou do pai.
+    const deltas = [];
+    for (const id of this.state.sel){
+      if (!id.startsWith(SUM_PREFIX)) continue;
+      const parent = parentOf(id);
+      if (!this.state.sel.has(parent)) continue;
+      for (const day of days){
+        const ps = d.series.find(s => s.entity === parent && s.day === day);
+        const ss = d.series.find(s => s.entity === id && s.day === day);
+        if (!ps || !ss) continue;
+        const sum = new Map(ss.points), map = new Map();
+        for (const [m, v] of ps.points){
+          const o = sum.get(m);
+          if (o != null) map.set(m, v - o);
+        }
+        deltas.push({label: `Δ (${this.LABEL[parent]}, Σ filhos)`
+                            + (multi ? ' · ' + day : ''), color: this.COLOR[parent] || '#888', map});
+      }
     }
 
     this._chart.setOption({
@@ -452,11 +538,17 @@ class EnergyAnalyticsPanel extends HTMLElement {
           if (!p.length) return '';
           const m = p[0].axisValue|0;
           const hh = String(Math.floor(m/60)).padStart(2,'0'), mm = String(m%60).padStart(2,'0');
+          const line = (mark, name, val) =>
+            `<div style="display:flex;gap:8px;justify-content:space-between">
+               <span>${mark}${name}</span><b>${(+val).toFixed(4)} ${d.unit}</b></div>`;
           const rows = p.filter(x=>x.data && x.data[1]!=null).slice(0,24)
-            .map(x=>`<div style="display:flex;gap:8px;justify-content:space-between">
-                       <span>${x.marker}${x.seriesName}</span>
-                       <b>${(+x.data[1]).toFixed(4)} ${d.unit}</b></div>`).join('');
-          return `<div style="margin-bottom:4px">${hh}:${mm}</div>${rows}`;
+            .map(x=>line(x.marker, x.seriesName, x.data[1])).join('');
+          // Δ vai SEMPRE por último, depois de um filete separando do que é série desenhada.
+          const dl = deltas.filter(g => g.map.has(m)).map(g => line(
+            `<span style="display:inline-block;width:10px;height:0;border-top:2px dashed ${g.color};`
+            + `vertical-align:middle;margin-right:5px"></span>`, g.label, g.map.get(m))).join('');
+          return `<div style="margin-bottom:4px">${hh}:${mm}</div>${rows}`
+               + (dl ? `<div style="margin-top:4px;padding-top:4px;border-top:1px solid #2a2a2a">${dl}</div>` : '');
         },
       },
       xAxis: xAxis(d.step_min),
@@ -535,6 +627,9 @@ class EnergyAnalyticsPanel extends HTMLElement {
     }
     this.$('prev').disabled = this.$('from').value <= this.MIN_DATE;
     this.$('next').disabled = this.$('to').value >= this.MAX_DATE;
+    // Persiste a DISTÂNCIA, nunca as datas: ao reabrir, `Até` volta em hoje e `De` recua isso.
+    this.state.span = this.daysBetween() - 1;
+    this.saveView();
     clearTimeout(this._dtTimer);
     if (now) this.load(); else this._dtTimer = setTimeout(() => this.load(), 250);
   }
@@ -608,7 +703,7 @@ class EnergyAnalyticsPanel extends HTMLElement {
       });
     }
 
-    const reload = () => this.load();
+    const reload = () => { this.saveView(); this.load(); };
     this.$('source').onchange = reload;
     this.$('mode').onchange = reload;
     this.$('degree').onchange = reload;
@@ -619,17 +714,19 @@ class EnergyAnalyticsPanel extends HTMLElement {
       e.currentTarget.classList.toggle('on', on);
       this._chart.resize();
       if (on && this.state.data) this.build();
+      this.saveView();
     };
     this.$('tPts').onclick   = e => { this.state.pts = !this.state.pts;
                                       e.currentTarget.classList.toggle('on', this.state.pts);
-                                      this.build(); };
+                                      this.saveView(); this.build(); };
     this.$('tCurve').onclick = e => { this.state.curve = !this.state.curve;
                                       e.currentTarget.classList.toggle('on', this.state.curve);
-                                      this.build(); };
+                                      this.saveView(); this.build(); };
     this.$('tAvg').onclick   = () => { const cur = this.state.avgUser === null
                                          ? this.daysBetween() > 1 : this.state.avgUser;
-                                       this.state.avgUser = !cur; this.build(); };
-    this.$('none').onclick   = () => { this.state.sel.clear(); this.renderTree(); this.load(); };
+                                       this.state.avgUser = !cur; this.saveView(); this.build(); };
+    this.$('none').onclick   = () => { this.state.sel.clear(); this.renderTree();
+                                       this.saveView(); this.load(); };
     this.$('menu').onclick   = () => this.dispatchEvent(
       new Event('hass-toggle-menu', {bubbles:true, composed:true}));
   }
@@ -647,23 +744,57 @@ class EnergyAnalyticsPanel extends HTMLElement {
     this.MAX_DAYS = j.max_days;
     this.MIN_DATE = j.min_date;
     this.MAX_DATE = j.today;          // "hoje" do SERVIDOR (fuso do HA), não do navegador
-    for (const n of this.NODES){ this.COLOR[n.entity] = n.color; this.LABEL[n.entity] = n.label; }
+    for (const n of this.NODES){
+      this.COLOR[n.entity] = n.color; this.LABEL[n.entity] = n.label;
+      if (n.synthetic) this.SYN[n.entity] = n.synthetic;
+    }
     const sel = this.$('source');
     for (const s of j.sources){
       const o = document.createElement('option');
       o.value = s.key; o.textContent = s.label; o.disabled = !s.enabled;
       sel.appendChild(o);
     }
+
+    // ---- última configuração ----------------------------------------------------------
+    // A seleção salva é filtrada contra a árvore ATUAL: mexer no painel de Energia pode ter
+    // aposentado uma entidade, e pedir série de algo que não existe mais só gera erro.
+    const v = this.readView() || {};
+    const known = new Set(this.NODES.map(n => n.entity));
+    for (const id of (v.sel || [])){
+      if (!known.has(id)) continue;
+      const p = parentOf(id);
+      if (p && !(v.sel || []).includes(p)) continue;   // derivada sem o pai não se sustenta
+      this.state.sel.add(id);
+    }
+    if (typeof v.pts === 'boolean') this.state.pts = v.pts;
+    if (typeof v.curve === 'boolean') this.state.curve = v.curve;
+    if (v.avgUser === true || v.avgUser === false) this.state.avgUser = v.avgUser;
+    for (const [id, val] of [['source', v.source], ['mode', v.mode], ['degree', v.degree]]){
+      if (val && [...this.$(id).options].some(o => o.value === val && !o.disabled)) {
+        this.$(id).value = val;
+      }
+    }
+    this.$('tPts').classList.toggle('on', this.state.pts);
+    this.$('tCurve').classList.toggle('on', this.state.curve);
+    if (v.eq){ this.$('eqCard').style.display = 'flex'; this.$('tEq').classList.add('on'); }
+
     this.renderTree();
+
+    // `Até` SEMPRE em hoje; `De` recua a distância salva, presa ao piso e ao teto da janela.
+    const span = Math.max(0, Math.min(this.MAX_DAYS - 1, Math.round(+v.span || 0)));
+    this.state.span = span;
     for (const id of ['from','to']){
-      this.$(id).value = this.MAX_DATE;
       this.$(id).min = this.MIN_DATE;
       this.$(id).max = this.MAX_DATE;
     }
+    this.$('to').value = this.MAX_DATE;
+    this.$('from').value = this.clampD(shiftD(this.MAX_DATE, -span));
     this.$('prev').disabled = this.$('from').value <= this.MIN_DATE;
     this.$('next').disabled = this.$('to').value >= this.MAX_DATE;
-    this.$('tAvg').classList.toggle('on', this.daysBetween() > 1);
+    this.$('tAvg').classList.toggle('on', this.state.avgUser === null
+                                         ? this.daysBetween() > 1 : this.state.avgUser);
     this.$('msg').textContent = 'Selecione uma ou mais entidades à esquerda.';
+    if (this.state.sel.size) this.load();
   }
 }
 

@@ -159,6 +159,42 @@ async def _rows_stats(hass: HomeAssistant, table, ids, lo, hi, step):
         expanding=("ids",))
 
 
+def _parse_selection(entities, tree):
+    """Separa o pedido em reais x sinteticas e diz o que a CONSULTA precisa buscar.
+
+    Sintetica e' `sum:<pai>` (soma dos filhos DIRETOS) ou `untracked:<pai>` (pai - essa soma).
+    O pai e os filhos entram na consulta mesmo sem estarem selecionados — eles alimentam a
+    conta, mas so' viram serie desenhada se o usuario tiver pedido.
+
+    Devolve (pedidas, necessarias, {id_sintetico: (pai, filhos)}), sem repetir e na ordem.
+    """
+    requested, need, kids = [], [], {}
+    for e in entities:
+        if e in tree.ALL_ENTITIES:
+            requested.append(e)
+            need.append(e)
+            continue
+        for prefix in (const.SUM_PREFIX, const.UNTRACKED_PREFIX):
+            if not e.startswith(prefix):
+                continue
+            parent = e[len(prefix):]
+            children = list(tree.CHILDREN.get(parent, []))
+            if not children or parent not in tree.ALL_ENTITIES:
+                break                      # no sem filhos nao tem soma nem sobra
+            requested.append(e)
+            kids[e] = (parent, children)
+            need.extend(children)
+            if prefix == const.UNTRACKED_PREFIX:
+                need.append(parent)        # a sobra precisa do pai; a soma, nao
+            break
+
+    def _uniq(seq):
+        seen = set()
+        return [x for x in seq if not (x in seen or seen.add(x))]
+
+    return _uniq(requested), _uniq(need), kids
+
+
 async def fetch(hass: HomeAssistant, tree: EnergyTree, entities, d_from, d_to,
                 source="states", mode="delta", degree="auto", max_days=const.DEFAULT_MAX_DAYS):
     """Uma serie por (entidade, dia): pontos `[minuto_do_dia, valor]` na grade do `step`.
@@ -186,22 +222,24 @@ async def fetch(hass: HomeAssistant, tree: EnergyTree, entities, d_from, d_to,
     lo = _epoch(d_from, tz)
     hi = _epoch(d_to + dt.timedelta(days=1), tz)
 
-    entities = [e for e in entities if e in tree.ALL_ENTITIES]
+    # `requested` e' o que sera' desenhado; `needed` inclui pai/filhos puxados so' para
+    # alimentar uma serie sintetica.
+    requested, needed, kids = _parse_selection(entities, tree)
     step_min = step // 60
     smp = 2 if step_min <= 5 else max(2, step_min // 4)
     out = {"step_min": step_min, "mode": mode, "source": source, "unit": "kWh",
            "degree": degree, "sample_min": smp,
            "days": [d.isoformat() for d in days], "series": [], "means": [], "missing": [],
            "dropped_total": 0}
-    if not entities:
+    if not needed:
         return out
 
-    mids = await _meta_ids(hass, entities, source)
-    out["missing"] = [e for e in entities if e not in mids]
-    ids = [mids[e] for e in entities if e in mids]
+    mids = await _meta_ids(hass, needed, source)
+    out["missing"] = [e for e in needed if e not in mids]
+    ids = [mids[e] for e in needed if e in mids]
     if not ids:
         return out
-    by_id = {mids[e]: e for e in entities if e in mids}
+    by_id = {mids[e]: e for e in needed if e in mids}
 
     # Janela ALARGADA para o ajuste enxergar contexto fora do dia (senao o 1o e o ultimo trecho
     # nascem/morrem dentro do dia e a curva aparece cortada). O que entra de fato sao 3 horas
@@ -213,11 +251,11 @@ async def fetch(hass: HomeAssistant, tree: EnergyTree, entities, d_from, d_to,
         rows = await _rows_stats(hass, table, ids, lo_q, hi_q, step)
 
     return await hass.async_add_executor_job(
-        _assemble, out, rows, by_id, entities, days, tz, lo_q, hi_q, step, mode, source,
+        _assemble, out, rows, by_id, requested, kids, days, tz, lo_q, hi_q, step, mode, source,
         degree, smp, step_min)
 
 
-def _assemble(out, rows, by_id, entities, days, tz, lo_q, hi_q, step, mode, source,
+def _assemble(out, rows, by_id, requested, kids, days, tz, lo_q, hi_q, step, mode, source,
               degree, smp, step_min):
     """Parte de CPU: bucketizacao, preenchimento, contexto e regressao. Roda no executor geral."""
     nbk = int(math.ceil((hi_q - lo_q) / step))
@@ -262,6 +300,29 @@ def _assemble(out, rows, by_id, entities, days, tz, lo_q, hi_q, step, mode, sour
             elif last is not None:
                 g[bk] = last
 
+    # ---- series sinteticas: `Σ filhos` e `(untracked)` ---------------------------------
+    # Nascem AQUI, sobre a grade ja' preenchida e antes da divisao por dia, para percorrerem
+    # exatamente o mesmo caminho de qualquer entidade real: contexto de 3 h, regressao,
+    # descarte por residuo, total do dia e media entre dias. Sao filhos DIRETOS: o neto entra
+    # na soma do pai dele, que por sua vez e' um dos termos da soma do avo.
+    # O negativo NAO e' clampado — pai menor que a soma dos filhos e' arvore mal configurada
+    # ou sensor errado, e zerar isso esconderia o problema.
+    for syn, (parent, children) in kids.items():
+        present = [grid[c] for c in children if c in grid]
+        if syn.startswith(const.SUM_PREFIX):
+            if not present:
+                continue
+            g = {}
+            for gc in present:
+                for bk, v in gc.items():
+                    g[bk] = g.get(bk, 0.0) + v
+        else:
+            base = grid.get(parent)
+            if not base:
+                continue
+            g = {bk: v - sum(gc.get(bk, 0.0) for gc in present) for bk, v in base.items()}
+        grid[syn] = {bk: round(v, 4) for bk, v in g.items()}
+
     # ---- distribuicao por dia + contexto de EXT_HOURS horas COM DADO -------------------
     day_start = {d.isoformat(): _epoch(d, tz) for d in days}
     buf = {}   # (entity, dia) -> {minuto relativo ao dia: valor}
@@ -295,7 +356,12 @@ def _assemble(out, rows, by_id, entities, days, tz, lo_q, hi_q, step, mode, sour
     def _in_day(x):
         return 0 <= x < 1440
 
-    order = {e: i for i, e in enumerate(entities)}
+    # Pai e filhos podem ter sido buscados so' para alimentar uma sintetica: o que nao foi
+    # PEDIDO nao vira serie desenhada.
+    for key in [k for k in buf if k[0] not in set(requested)]:
+        del buf[key]
+
+    order = {e: i for i, e in enumerate(requested)}
     acc = {}      # entidade -> {minuto: [soma, n]} sobre TODOS os pontos (inclusive o contexto)
     ndrop = 0
     for (entity, day), pts in sorted(buf.items(), key=lambda kv: (order[kv[0][0]], kv[0][1])):
@@ -315,7 +381,7 @@ def _assemble(out, rows, by_id, entities, days, tz, lo_q, hi_q, step, mode, sour
             s[0] += v
             s[1] += 1
 
-    for entity in entities:
+    for entity in requested:
         a = acc.get(entity)
         if not a:
             continue

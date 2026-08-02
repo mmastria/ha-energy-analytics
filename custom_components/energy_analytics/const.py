@@ -17,6 +17,12 @@ MAX_DAYS_CEILING = 120
 # Piso da janela de datas do painel (antes disso a historia desta casa nao presta).
 MIN_DATE = "2024-01-01"
 
+# Series SINTETICAS de um no com filhos. Nao sao entidades do HA: o id e' o prefixo + o
+# entity_id do pai, e o valor e' derivado dos filhos DIRETOS (nunca dos netos, senao o neto
+# entraria duas vezes — uma na soma do pai dele, outra na do avo).
+SUM_PREFIX = "sum:"              # soma dos filhos diretos
+UNTRACKED_PREFIX = "untracked:"  # pai - soma dos filhos diretos
+
 # Tabelas do recorder. Sem prefixo de schema: a sessao do recorder ja vem no search_path certo.
 TBL_STATES = "states"
 TBL_STATES_META = "states_meta"
