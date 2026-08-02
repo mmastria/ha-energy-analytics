@@ -24,10 +24,13 @@ Requisitos: HA **2026.7+**, painel de **Energia** já configurado (fontes `grid`
 - **Coluna esquerda** — as entidades do painel de Energia (fontes + devices), com **indentação
   pela árvore de consumo** (`included_in_stat`) e checkbox, todos **desmarcados**. Qualquer
   marcação/desmarcação refaz o gráfico.
+- **`Total consumed`** é a **raiz** dos devices — o consumo da casa, o mesmo do painel de Energia.
+  Não é entidade: é derivado das 5 fontes (ver abaixo). Os devices de topo são filhos dele.
 - **`Σ filhos` e `(untracked)`** — todo nó com filhos ganha duas linhas derivadas, no nível dos
   filhos: `Σ filhos` **abre** a lista e `(untracked)` a **fecha**. Elas se comportam como qualquer
   entidade (regressão, descarte, total, média), mas só ficam **selecionáveis com o pai
-  selecionado** — desmarcar o pai desmarca e trava as duas.
+  selecionado** — desmarcar o pai desmarca e trava as duas. Na raiz, o `(untracked)` é exatamente
+  o **`Untracked consumption`** do painel de Energia.
 - **Datas De → Até** — ambas iniciam **hoje** (fuso do HA); qualquer mudança refaz o gráfico.
   Janela permitida: **01/01/2024 → hoje**. As duas pontas se acompanham (mexer no `De` para frente
   empurra o `Até`; puxar o `Até` para trás puxa o `De`), sempre dentro da janela.
@@ -152,6 +155,28 @@ com clamp em 0 (reset do contador viraria um negativo enorme).
 
 O `lag` do primeiro bucket é ancorado na **última amostra antes da janela** (lookback de 1 dia),
 senão o primeiro bucket de cada janela perderia o delta.
+
+## `Total consumed` — a raiz
+
+Nem `Total consumed` nem `Untracked consumption` existem como sensor: o HA os deriva no frontend a
+partir das 5 fontes. Aqui a conta é a mesma:
+
+```
+used_solar   = max(0, solar − exportado − carga)        solar que a casa consumiu
+grid_to_batt = max(0, carga − max(0, solar − exportado))  rede que foi para a BATERIA
+consumed     = (rede − grid_to_batt) + used_solar + descarga
+```
+
+A parcela **rede → bateria** sai do consumo: ela não foi consumida pela casa, e deixá-la dentro
+inflaria o `untracked` justamente nas horas de carga via rede.
+
+⚠️ Esses `max(0, …)` são **não-lineares** e o HA os avalia na resolução **horária** dele. Aqui são
+avaliados no **bucket do painel**: na fonte `statistics (1 h)` o número bate **exato** com o painel
+de Energia; nas fontes de 5 min pode divergir, porque `Σ max(0, x₅ₘᵢₙ) ≥ max(0, Σ xₕₒᵣₐ)`.
+Divergência ali é esperada, não bug.
+
+Como os devices de topo são os filhos da raiz, o `(untracked)` dela cai da mesma conta
+`pai − Σ filhos` — é o `Untracked consumption` do HA, sem caso especial.
 
 ## Séries derivadas (`Σ filhos` / `(untracked)`)
 

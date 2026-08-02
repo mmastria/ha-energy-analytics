@@ -92,7 +92,9 @@ token, sem CORS, sem token expirando no meio da sessão. No front: `hass.callWS(
 - `energy_analytics/tree` →
   `{nodes: [{entity,label,color,depth,group,children}], sources[], max_days, min_date, today}`.
   Nó com filhos gera duas linhas extras com `{parent, synthetic: "sum"|"untracked"}`, cujo `entity`
-  **não é `entity_id`**: `sum:<pai>` e `untracked:<pai>`.
+  **não é `entity_id`**: `sum:<pai>` e `untracked:<pai>`. A raiz dos devices é `home`
+  (`Total consumed`), também **não é `entity_id`** — é derivada das 5 fontes, e seus filhos são os
+  devices de topo.
 - `energy_analytics/series` — params `{entities[], from, to, source, degree}` →
   ```
   {step_min, sample_min, days[], unit, degree,

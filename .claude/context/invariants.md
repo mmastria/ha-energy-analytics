@@ -69,6 +69,14 @@ ficaria congelada errada. Campo de data vazio = digitação em andamento: não c
 toggle sobre o input novo e desmarca de volta. A linha atualiza só a própria classe. `syncSynthetic`
 obedece a isto: mexe apenas nas duas linhas derivadas do pai, nunca redesenha a árvore.
 
+**9b. A raiz `home` é derivada, não medida.** `Total consumed` sai das 5 fontes
+(`series._home_grid`), com a mesma conta do HA — incluindo tirar a parcela **rede → bateria** do
+consumo. Os `max(0, …)` são não-lineares e o HA os avalia **por hora**; aqui vão no **bucket do
+painel**, então `statistics (1 h)` bate exato com o painel de Energia e as fontes de 5 min podem
+divergir (`Σ max(0, x₅) ≥ max(0, Σ xₕ)`). **Isso é decisão, não bug** — não "consertar" clampando
+por hora sem falar com o usuário. Os filhos da raiz são os devices de **topo**, e é isso que faz o
+`(untracked)` dela ser o `Untracked consumption` do HA sem caso especial.
+
 **10. `Σ filhos` / `(untracked)` são presas ao pai.** Só selecionáveis com o pai selecionado;
 desmarcar o pai **desmarca e trava** as duas. A trava é aplicada em três lugares e os três têm que
 concordar: `renderTree` (ao desenhar), `syncSynthetic` (ao clicar no pai) e a restauração do estado
