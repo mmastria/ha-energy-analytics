@@ -48,5 +48,21 @@ que o log **não** traz `ValueError: Overwriting panel` (invariante H3) nem
 ## Relate
 
 Uma linha por item: passou / falhou / **não verificado**. Não diga que funciona sem ter visto.
-Estado conhecido: passos 1–3 OK (HACS `installed_version: 1bafb44`, entry `loaded`); **4 e 5 nunca
-foram exercitados**.
+
+Estado conhecido (2026-08-02, `v0.1.1`):
+- 1–3 OK — HACS `installed_version: v0.1.1`, entry `loaded`, log limpo;
+- 5 OK — reload 2× sem `Overwriting panel` nem `already registered`;
+- 4 **parcial** — os dois comandos WS respondem de ponta a ponta e os estáticos são servidos com
+  md5 idêntico ao repo, mas **o desenho na tela nunca foi visto**. Falta a sidebar renderizada e o
+  gráfico traçado.
+
+## Exercitar os comandos WS sem browser
+
+O `ha_call_service` tem escape hatch de WebSocket cru — resolve o passo 4 menos a parte visual:
+```
+ha_call_service(ws_command="energy_analytics/tree")
+ha_call_service(ws_command="energy_analytics/series",
+                data={"entities": ["sensor.pwm_grid_energy"], "from": "...", "to": "...",
+                      "source": "statistics", "mode": "delta", "degree": "auto"})
+```
+E o passo 5 sai por `homeassistant.reload_config_entry` com `entry_id`, 2×, conferindo o log depois.

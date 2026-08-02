@@ -9,7 +9,12 @@
 | Contrato do WS | documentado no `README.md` e em `ha-apis.md` | não há rota de docs viva a manter em sincronia |
 | SQL | **Postgres-only** (`DISTINCT ON`, operador `~`) | o recorder é TimescaleDB/Postgres; portabilidade para SQLite não é objetivo |
 
-## Não verificado em runtime
+## Estado de verificação (2026-08-02, `v0.1.1`)
 
-Nenhuma prova visual foi coletada: o painel na sidebar, os dois comandos WS respondendo e o ciclo
-de reload (sem `Overwriting panel`) **não** foram exercitados. Ver `/ea-verify`.
+Provado: integração carrega, entry `loaded`, os dois comandos WS respondem de ponta a ponta
+(`tree` e `series`, este último com SQL + regressão + descarte), estáticos servidos com md5 igual
+ao repo, e o ciclo de reload 2× não estoura `Overwriting panel` (invariante H3).
+
+**Não provado: o desenho.** A sidebar renderizada e o gráfico traçado nunca foram vistos — a
+extensão do Chrome não estava conectada e o Playwright cai na tela de login do HA. Ver `/ea-verify`
+passo 4.

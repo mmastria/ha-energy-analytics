@@ -104,12 +104,13 @@ Roteamento completo: **`.claude/HARNESS.md`**. Comece por lá em tarefa não-tri
 ## Estado (conferido 2026-08-02 pelo `ha-mcp`)
 
 Instalada **pelo HACS** como repositório custom `mmastria/ha-energy-analytics`, HACS id
-`1319738301`, `installed_version: 1bafb44`. Não há release: sem tag, o HACS acompanha o branch
-default e a versão é o SHA do commit. Cortada a primeira tag `vX.Y.Z`, ele resolve por tag e
-`pending_update` vira o sinal de que há coisa nova.
+`1319738301`, `installed_version: v0.1.1`. O HACS resolve por **tag** (release publicada); sem
+release ele cairia para o branch default e a versão viraria o SHA do commit.
 
 Entry `01KZ02TX29DT3TPGX56BV0NC0G`, `state: loaded`, `options: {max_days: 15}`, HA 2026.7.4.
-**Runtime nunca foi verificado visualmente** — rode `/ea-verify`.
+
+Verificado: carga, os dois comandos WS de ponta a ponta, estáticos com md5 igual ao repo e reload
+2× sem `Overwriting panel`. **Não verificado: o desenho na tela** — rode `/ea-verify` passo 4.
 
 ## Ambiente
 
