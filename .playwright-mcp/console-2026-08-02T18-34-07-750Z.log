@@ -1,0 +1,2 @@
+[     223ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://homeassistant:8123/www/community/lovelace-card-mod/card-mod.js?hacstag=190927524410:0
+[     225ms] Failed to fetch dynamically imported module: http://homeassistant:8123/www/community/lovelace-card-mod/card-mod.js?hacstag=190927524410

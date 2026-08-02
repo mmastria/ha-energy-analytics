@@ -541,7 +541,9 @@ class EnergyAnalyticsPanel extends HTMLElement {
 
   // Setas: deslocam as DUAS datas 1 dia, preservando o intervalo; travam na borda da janela.
   step(n){
-    const f = shiftD(this.$('from').value, n), t = shiftD(this.$('to').value, n);
+    const fv = this.$('from').value, tv = this.$('to').value;
+    if (!fv || !tv) return;   // campo vazio = digitação em andamento (invariante 8b): não deslocar
+    const f = shiftD(fv, n), t = shiftD(tv, n);
     if (t > this.MAX_DATE || f < this.MIN_DATE) return;
     this.$('from').value = f; this.$('to').value = t;
     this.datesChanged(true);
