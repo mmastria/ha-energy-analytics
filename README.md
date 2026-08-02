@@ -24,6 +24,10 @@ Requisitos: HA **2026.7+**, painel de **Energia** já configurado (fontes `grid`
 - **Coluna esquerda** — as entidades do painel de Energia (fontes + devices), com **indentação
   pela árvore de consumo** (`included_in_stat`) e checkbox, todos **desmarcados**. Qualquer
   marcação/desmarcação refaz o gráfico.
+- **`Σ filhos` e `(untracked)`** — todo nó com filhos ganha duas linhas derivadas, no nível dos
+  filhos: `Σ filhos` **abre** a lista e `(untracked)` a **fecha**. Elas se comportam como qualquer
+  entidade (regressão, descarte, total, média), mas só ficam **selecionáveis com o pai
+  selecionado** — desmarcar o pai desmarca e trava as duas.
 - **Datas De → Até** — ambas iniciam **hoje** (fuso do HA); qualquer mudança refaz o gráfico.
   Janela permitida: **01/01/2024 → hoje**. As duas pontas se acompanham (mexer no `De` para frente
   empurra o `Até`; puxar o `Até` para trás puxa o `De`), sempre dentro da janela.
@@ -35,6 +39,9 @@ Requisitos: HA **2026.7+**, painel de **Energia** já configurado (fontes `grid`
   seguinte. (O `input[type=date]` nativo gira cada segmento dentro do seu pai; o painel detecta o
   estouro e reescreve a data.) Na borda da janela o passo simplesmente não anda.
 - **Botões** `Pontos` / `Curva` / `Média` (on/off) e os seletores `Fonte` / `Valor` / `Ajuste`.
+- **A seleção e a configuração voltam como estavam** na próxima vez que a tela abrir. As **datas
+  não** são salvas: guarda-se a **distância em dias** entre elas, e ao abrir `Até` volta em **hoje**
+  com `De` recuando essa distância.
 - **Gráfico** — eixo X **sempre 1 dia**: grade fina a cada **5 min**, linha de grade destacada a
   cada **30 min**, rótulo a cada **hora** (00:00…24:00).
 
@@ -143,10 +150,30 @@ As entidades do painel de Energia são **odômetros** (`total_increasing`, kWh a
 O `lag` do primeiro bucket é ancorado na **última amostra antes da janela** (lookback de 1 dia),
 senão o primeiro bucket de cada janela perderia o delta.
 
+## Séries derivadas (`Σ filhos` / `(untracked)`)
+
+Nascem no **backend**, sobre a grade já preenchida e **antes** da divisão por dia — a curva é
+regressão do `fit.py`, que roda no servidor. Com isso elas percorrem exatamente o mesmo caminho de
+qualquer entidade: contexto de 3 h, ajuste, descarte por resíduo, total e média entre dias.
+
+A soma é dos **filhos diretos**. Somar a subárvore inteira contaria o neto duas vezes — uma na
+soma do pai dele, outra na do avô; o neto já aparece na `Σ filhos` do próprio pai, que por sua vez
+é um dos termos da soma do avô.
+
+`pai − Σ filhos` **não é clampado**: negativo significa árvore mal configurada ou sensor errado, e
+zerar isso esconderia o problema. Pai e filhos são consultados mesmo sem estarem selecionados —
+alimentam a conta sem virar série desenhada.
+
+No gráfico, `Σ filhos` herda a cor do pai com **traço tracejado** (sem isso as duas linhas seriam
+indistinguíveis) e `(untracked)` usa o cinza `#9e9e9e` de "não monitorado" do HA. Com a `Σ` ligada,
+o tooltip ganha na última linha `Δ (pai, Σ filhos)`.
+
 ## API (WebSocket)
 
 - `energy_analytics/tree` → `{nodes[{entity,label,color,depth,group,children}], sources[],
-  max_days, min_date, today}`
+  max_days, min_date, today}`. Nó com filhos gera duas linhas extras, que trazem também
+  `{parent, synthetic: "sum"|"untracked"}` e cujo `entity` **não é um `entity_id`**:
+  `sum:<pai>` (soma dos filhos **diretos**) e `untracked:<pai>` (pai − essa soma).
 - `energy_analytics/series` — `{entities[], from, to, source, mode, degree}` →
   `{step_min, sample_min, days[], unit, degree,
   series[{entity, day, points[[min,val]], curve[[min,val]], dropped[], segments[], total}],

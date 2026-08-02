@@ -66,7 +66,18 @@ quando `Curva` estava desligada, mudando o traçado sem que nenhum dado mudasse.
 ficaria congelada errada. Campo de data vazio = digitação em andamento: não completar com hoje.
 
 **9. Não re-renderizar a árvore dentro do `onchange` do checkbox** — o `<label>` re-dispara o
-toggle sobre o input novo e desmarca de volta. A linha atualiza só a própria classe.
+toggle sobre o input novo e desmarca de volta. A linha atualiza só a própria classe. `syncSynthetic`
+obedece a isto: mexe apenas nas duas linhas derivadas do pai, nunca redesenha a árvore.
+
+**10. `Σ filhos` / `(untracked)` são presas ao pai.** Só selecionáveis com o pai selecionado;
+desmarcar o pai **desmarca e trava** as duas. A trava é aplicada em três lugares e os três têm que
+concordar: `renderTree` (ao desenhar), `syncSynthetic` (ao clicar no pai) e a restauração do estado
+salvo (derivada sem o pai na lista é descartada). O id delas **não é `entity_id`** — é
+`sum:<pai>` / `untracked:<pai>`; qualquer código que assuma `entity_id` aqui quebra.
+
+**11. O estado salvo não guarda datas.** Só a **distância em dias** (`span = daysBetween() − 1`).
+Ao abrir, `Até` = hoje e `De` = hoje − `span`, preso a `MIN_DATE` e ao teto `max_days`. Salvar a
+data absoluta faria o painel abrir no passado e parecer congelado.
 
 ## HA (integração e painel)
 
