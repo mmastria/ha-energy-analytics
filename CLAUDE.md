@@ -35,6 +35,9 @@ A curva desenhada é **regressão polinomial por trecho** (OLS, grau por AICc), 
 8. **Git aqui é normal** (o bloqueio de git é hook do outro repo, não deste).
 9. **SQL é Postgres-only** (`DISTINCT ON`, operador de regex `~`). O recorder de produção é
    TimescaleDB/Postgres e isso é decisão aceita — não "portar para SQLite".
+9b. **Não distribuir.** Nada de PR em `home-assistant/brands` nem em `hacs/default`. O repo é
+   público só porque o HACS exige para baixar; o ícone cinza "icon not available" no HACS é
+   **esperado** e não é bug a corrigir. Ver *Não-distribuição* em `.claude/context/decisions.md`.
 10. **Python local = `uv`, na versão do HA. SEMPRE.** Nada de `python3` do sistema: todo código
     Python que rodar aqui — validação, exercício do `fit.py`, script solto — vai por
     **`uv run`**. O interpretador do `.venv` tem que ser o **mesmo que o HA executa**

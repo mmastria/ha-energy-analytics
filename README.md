@@ -6,6 +6,33 @@ Energia**, lendo `states` e `statistics*` pela sessão do **recorder** (**soment
 Serve para comparar o **formato** do dia — quando a casa consome, não quanto no mês. Para os
 totais por dia/mês/ano use o painel de Energia oficial do HA.
 
+## Escopo — projeto pessoal, não distribuído
+
+Este repositório é **público para que o HACS consiga baixá-lo**, não porque a integração esteja
+pronta para outras instâncias. Ela **não está na loja default do HACS** e **não há intenção de
+colocá-la** lá: só é instalável por quem adicionar a URL como repositório custom, de propósito.
+
+Não é falta de polimento — são dependências duras do ambiente de origem:
+
+| dependência | por quê trava a instalação em outro HA |
+|---|---|
+| **Recorder em PostgreSQL/TimescaleDB** | o SQL usa `DISTINCT ON` e o operador de regex `~`; numa instalação com o recorder padrão (**SQLite**) as consultas simplesmente falham. Portar não é objetivo |
+| **Painel de Energia já configurado com `grid`, `solar` e `battery`** | a raiz `Total consumed` é derivada das 5 fontes; sem solar ou sem bateria a conta não fecha e o painel nasce vazio ou errado |
+| **Volume e granularidade do recorder de origem** | o ajuste depende de `states` retidos com passo de 5 min por longos períodos; com a retenção padrão (10 dias) a maior parte da tela não tem dado |
+| **Sem release de compatibilidade** | não há matriz de versões testada, migração de config nem suporte. Vale HA **2026.7+** porque é o que roda aqui, hoje |
+| **Verificação de correção fora deste repo** | a única prova de que os números estão certos é a comparação com uma implementação de referência que roda na máquina do autor (`/ea-parity`). Terceiro não consegue reproduzi-la |
+
+Consequência visível: no HACS a integração aparece com o placeholder cinza **"icon not available"**,
+porque o domínio `energy_analytics` **não está registrado** em
+[`home-assistant/brands`](https://github.com/home-assistant/brands) — e não será. Aquele PR só
+hospedaria o ícone num CDN público, mas é registro público permanente de um projeto que não se
+propõe a ser usado por terceiros. O ícone cinza é o custo aceito. Os PNGs em
+`custom_components/energy_analytics/brand/` ficam guardados no repo e são **inertes** — o HACS não
+os lê.
+
+Sem suporte, sem issues respondidas, sem garantia de compatibilidade entre versões. Use como
+referência de implementação, não como integração pronta.
+
 ## Instalação (HACS)
 
 1. HACS → Integrações → ⋮ → **Repositórios personalizados**
@@ -18,6 +45,8 @@ Em *Configurar* dá para mudar o **máximo de dias por consulta** (default 60).
 
 Requisitos: HA **2026.7+**, painel de **Energia** já configurado (fontes `grid`, `solar` e
 `battery`) e recorder em **PostgreSQL** — o SQL usa `DISTINCT ON` e o operador de regex `~`.
+Nenhum deles é degradável: veja [Escopo](#escopo--projeto-pessoal-não-distribuído) antes de
+tentar instalar noutra instância.
 
 ## Tela
 

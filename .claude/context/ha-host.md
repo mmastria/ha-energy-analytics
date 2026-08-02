@@ -2,7 +2,9 @@
 
 Este projeto é **pessoal, para uma instância só**. Hardcodes de instância são aceitos (decisão
 travada com o usuário); não há PR no `home-assistant/brands` a fazer, nem intenção de entrar na
-loja default do HACS.
+loja default do HACS. O repo é público **só porque o HACS exige** para baixar — ver
+*Não-distribuição* em `decisions.md`. Consequência: ícone cinza "icon not available" no HACS, e é
+esperado.
 
 ## Acesso — só MCP
 
